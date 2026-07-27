@@ -1,89 +1,87 @@
 # Calorie Count
 
-A daily and weekly calorie budget, built to be driven one-handed in a supermarket
-aisle. Static files only — no build step, no backend, no accounts. All data lives
-in your phone's browser storage.
+A daily and weekly calorie budget, designed to be driven one-handed in a
+supermarket aisle. Static files only — no build step, no backend, no accounts,
+and no network calls after the first load. All data stays in your browser's
+storage.
 
-```
-index.html        the whole app
-manifest.json     makes it installable
-sw.js             offline cache
-icons/            launcher icons
-.nojekyll         stops GitHub Pages trying to process this as a Jekyll site
-```
+Live at **https://coolengineerguy.github.io/**
 
----
+## Features
 
-## Deploying to GitHub Pages
+- Daily budget with a remaining-today readout and a progress bar
+- A shopping list you tick off as you eat, with an "if you finish the list"
+  projection of where the day lands
+- Monday-to-Sunday week view: per-day bars, pace against budget, last week's total
+- Installable as a PWA — launcher icon, no address bar, works offline
+- CSV and JSON export, JSON restore
+- Light and dark themes, following the system setting
 
-1. Make a new repo. It can be private — Pages works on private repos for
-   personal accounts on paid plans, and public ones on free; if you're on free,
-   make it public. There's nothing sensitive in these files.
-2. Upload the contents of this folder to the repo root (drag them into the
-   GitHub web uploader if you like — no git required).
-3. **Settings → Pages → Build and deployment → Source: Deploy from a branch**,
-   branch `main`, folder `/ (root)`. Save.
-4. Wait a minute or two, then open `https://<you>.github.io/<repo>/` on your phone.
+## Usage
 
-All paths in the app are relative, so it works from a subpath like
-`/calorie-count/` without any configuration. If you'd rather have it at
-`https://<you>.github.io/` with no subpath, name the repo `<you>.github.io`.
+**Log eaten** records calories against today immediately.
 
-### Installing it
+**Add to list** queues an item without logging it. Ticking an item off the list
+logs it against the day you ticked it, so the list stays a same-day scratchpad —
+anything left on it at midnight is dropped. Nothing is lost by that, because
+items only enter the log when ticked. Bought something today to eat tomorrow?
+Use **Log eaten** tomorrow rather than the list.
 
-Open the URL in Chrome on Android. Either use the **Install to home screen**
-button in Settings inside the app, or Chrome's ⋮ menu → *Add to Home screen*.
-You'll get a real launcher icon and no address bar.
+The daily budget is set in Settings, and the weekly budget is that × 7. Changing
+it re-scores every day on display, past ones included.
 
-Installing also usually gets you persistent storage, which means Chrome won't
-evict your data when the phone is short on space. The Settings panel tells you
-which mode you're in.
-
-### Making changes later
-
-Edit `index.html` in GitHub's web editor (works fine from a phone), commit, and
-Pages redeploys in about a minute.
-
-**Bump `VERSION` in `sw.js` when you do.** The service worker serves the cached
-copy first, so without a version bump you may sit on the old one for a launch or
-two. Changing `v1` to `v2` throws the old cache away.
-
----
-
-## The alternatives, if the git round-trip annoys you
-
-- **Netlify Drop** (`app.netlify.com/drop`) — drag this folder onto the page,
-  get an HTTPS URL. No account needed to start.
-- **Cloudflare Pages** — same idea, direct upload option.
-
-All three are free and behave identically for a static PWA. GitHub Pages' one
-real advantage is that you can edit a file from your phone and have it redeploy.
-
----
-
-## Your data
-
-Stored in `localStorage` under the key `calcount:v1`, on that exact origin.
-
-Things that destroy it: clearing browsing data, uninstalling the PWA and
-choosing to remove data, or a different browser/phone. Things that don't:
-closing the app, rebooting, deploying an update.
-
-**Export from Settings periodically.** CSV gives you one row per entry
-(`date, time, kcal, label, source`) which pivots straight into a spreadsheet.
-JSON is a full backup that **Restore** will read back in — that's your route
-onto a new phone.
-
-The app keeps eight weeks of daily records but only ever displays this week and
-last, per the original brief. The extra weeks exist so the CSV export is worth
+Eight weeks of daily records are retained, but only the current and previous
+week are ever shown. The extra history exists so the CSV export is worth
 something.
 
-## Notes on behaviour
+## Data
 
-- Weeks run Monday to Sunday.
-- The list is a same-day scratchpad. Anything left on it at midnight is dropped.
-  Nothing is lost by this: items only enter your log when you tick them, and
-  ticking logs them against the day you ticked.
-- Bought something today, eating it tomorrow? Use **Log eaten** tomorrow rather
-  than the list.
-- No web fonts, no CDNs, no network calls of any kind after the first load.
+Everything lives in `localStorage` under the key `calcount:v1`, scoped to the
+origin serving the app. Nothing is transmitted anywhere.
+
+It survives closing the app, rebooting, and deploying updates. It does not
+survive clearing browsing data, uninstalling with the "remove data" option, or
+switching browser or phone.
+
+**Export from Settings periodically.** CSV gives one row per entry
+(`date, time, kcal, label, source`) for use in a spreadsheet. JSON is a full
+backup that **Restore** reads back in, and is the route onto a new phone.
+
+## Installing
+
+Open the site in Chrome on Android and use either the **Install to home screen**
+button in Settings or Chrome's ⋮ menu → **Add to Home screen**.
+
+Installing also generally grants persistent storage, meaning the browser will
+not evict the data to reclaim space. The Settings panel reports which mode is in
+effect.
+
+## Deploying
+
+The repository is named `<user>.github.io`, so GitHub Pages serves it from the
+root with **Settings → Pages → Build and deployment** set to **Deploy from a
+branch**, branch `main`, folder `/ (root)`. Pushes redeploy in about a minute.
+
+All paths in the app are relative, so it works equally well from a subpath such
+as `/calorie-count/` if you'd rather host it under a differently named repo. Any
+static host will serve it — Netlify Drop and Cloudflare Pages both accept a
+direct folder upload and behave identically.
+
+## Development
+
+There is no toolchain. Edit `index.html` and reload.
+
+`sw.js` serves from cache first and revalidates in the background, so **bump
+`VERSION` in `sw.js` whenever you change `index.html`**. Without it, an old copy
+may be served for a launch or two; changing `v1` to `v2` discards the previous
+cache.
+
+## Files
+
+```
+index.html      the entire app — markup, styles, logic
+manifest.json   PWA metadata, makes the app installable
+sw.js           service worker, offline cache
+icons/          launcher and maskable icons, favicon
+.nojekyll       stops GitHub Pages running the site through Jekyll
+```
