@@ -79,11 +79,21 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 .ri.warn i{background:var(--amber)} .ri.over i{background:var(--red)}
 .ri .pend{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)}
 
+/* ceiling: the real burn rate. Amber = past the target, red = past this. */
+.ceil{
+  margin-top:11px;padding-top:9px;border-top:1px dashed var(--hair);
+  display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+}
+.ceil .n{font-family:var(--mono);font-size:13px;font-weight:700}
+.ceil.warn .n{color:var(--amber)} .ceil.over .n{color:var(--red)}
+
 .proj{
   margin-top:12px;padding-top:11px;border-top:1px dashed var(--hair);
-  display:flex;justify-content:space-between;align-items:baseline;
+  display:flex;justify-content:space-between;align-items:baseline;gap:12px;
 }
 .proj .n{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.proj .v{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
+.proj.warn .n{color:var(--amber)}
 .proj.over .n{color:var(--red)}
 
 /* ---- receipt list ---- */
@@ -144,6 +154,7 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 .week{padding:13px 12px}
 .week .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:13px}
 .week .top .n{font-size:30px;font-weight:800;letter-spacing:-.03em}
+.week .top .n.warn{color:var(--amber)}
 .week .top .n.over{color:var(--red)}
 .bars{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;align-items:end;height:76px}
 .bars .d{display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:5px}
@@ -158,6 +169,7 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
   padding:10px 12px;border-top:1px solid var(--rule);
 }
 .lastwk .n{font-family:var(--mono);font-size:13px}
+.lastwk .n.strong{font-weight:700;color:var(--ink)}
 
 /* ---- bottom bar ---- */
 .dock{
@@ -289,7 +301,12 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
   <div class="field">
     <label class="lab" for="budget">Daily budget (kcal)</label>
     <input id="budget" type="number" inputmode="numeric" min="1" max="20000">
-    <p class="note">Weekly budget is this &times; 7. Changing it re-scores every day shown, past ones included.</p>
+    <p class="note">What you're aiming at. Weekly budget is this &times; 7. Changing it re-scores every day shown, past ones included.</p>
+  </div>
+  <div class="field">
+    <label class="lab" for="tdee">Daily expenditure &mdash; TDEE (kcal)</label>
+    <input id="tdee" type="number" inputmode="numeric" min="1" max="20000">
+    <p class="note">What you actually burn. The weekly ceiling is this &times; 7 &mdash; the real upper limit, so an over-budget day only shows amber while the week stays under it. Red is reserved for going past the ceiling.</p>
   </div>
   <div class="lab" style="margin-bottom:6px">Export</div>
   <div class="linkrow">
@@ -334,6 +351,7 @@ const Store = {
 };
 
 const DEFAULT_BUDGET = 2000;
+const DEFAULT_TDEE = 3100;
 const KEEP_WEEKS = 8;
 const DAYS = ['M','T','W','T','F','S','S'];
 
@@ -354,7 +372,7 @@ const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
 /* ---------- state ---------- */
 const blank = () => ({
-  v:1, budget:DEFAULT_BUDGET,
+  v:1, budget:DEFAULT_BUDGET, tdee:DEFAULT_TDEE,
   list:{date:ymd(), items:[]},
   days:{}, recents:[]
 });
@@ -389,24 +407,29 @@ function rollover(){
   if (curDay !== t){ curDay = t; render(); }
 }
 
-/* ---------- render ---------- */
-function tone(used, budget){
-  if (used > budget) return 'over';
+/* ---------- render ----------
+ * Two lines to score against: the budget you're aiming at, and the ceiling you
+ * actually burn. Amber from 85% of budget upwards, red only past the ceiling —
+ * an over-budget day is a choice, an over-ceiling one is a surplus.
+ */
+function tone(used, budget, ceiling){
+  if (used > ceiling) return 'over';
   if (used > budget * 0.85) return 'warn';
   return 'ok';
 }
 
 function render(){
   const t = curDay = ymd();
-  const B = S.budget;
+  const B = S.budget, C = S.tdee;
   const used = dayTotal(t), left = B - used, pend = pendingTotal(), after = left - pend;
+  const cLeft = C - used, cAfter = cLeft - pend;
 
   document.getElementById('today').textContent =
     new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'short'});
 
   const pctUsed = Math.max(0, Math.min(100, used/B*100));
   const pctPend = Math.max(0, Math.min(100 - pctUsed, pend/B*100));
-  const tn = tone(used, B);
+  const tn = tone(used, B, C);
 
   /* hero */
   let h = `<div class="panel"><div class="hero ${tn}">
@@ -419,16 +442,22 @@ function render(){
     <div class="ri ${tn}">
       <i style="width:${pctUsed}%"></i>
       <div class="pend" style="left:${pctUsed}%;width:${pctPend}%"></div>
+    </div>
+    <div class="ceil ${used > C ? 'over' : (used > B ? 'warn' : '')}">
+      <div class="lab">Ceiling ${fmt(C)}</div>
+      <div class="n">${cLeft < 0 ? fmt(-cLeft)+' over' : fmt(cLeft)+' left'}</div>
     </div>`;
 
   if (pend > 0){
-    h += `<div class="proj ${after<0?'over':''}">
+    h += `<div class="proj ${cAfter<0 ? 'over' : (after<0 ? 'warn' : '')}">
       <div>
         <div class="lab">If you finish the list</div>
-        <div class="v" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px">
-          ${fmt(pend)} kcal still on it</div>
+        <div class="v">${fmt(pend)} kcal still on it</div>
       </div>
-      <div class="n">${after < 0 ? '−'+fmt(-after) : fmt(after)}</div>
+      <div style="text-align:right">
+        <div class="n">${after < 0 ? '−'+fmt(-after) : fmt(after)}</div>
+        <div class="v">${cAfter < 0 ? fmt(-cAfter)+' over ceiling' : fmt(cAfter)+' to ceiling'}</div>
+      </div>
     </div>`;
   }
   h += `</div></div>`;
@@ -486,18 +515,19 @@ function render(){
   }
 
   /* week */
-  const mon = mondayOf(), wd = weekDates(mon), wb = B*7;
+  const mon = mondayOf(), wd = weekDates(mon), wb = B*7, wc = C*7;
   const wtot = wd.reduce((a,d)=>a+dayTotal(d),0);
   const lwd = weekDates(addDays(mon,-7));
   const ltot = lwd.reduce((a,d)=>a+dayTotal(d),0);
-  const peak = Math.max(B*1.15, ...wd.map(dayTotal), 1);
+  const peak = Math.max(C, B*1.15, ...wd.map(dayTotal), 1);
   const elapsed = wd.filter(d => d <= t).length;
+  const wLeft = wc - wtot;
 
   h += `<div class="panel"><div class="week">
     <div class="top">
       <div>
         <div class="lab">This week vs ${fmt(wb)}</div>
-        <div class="n ${wtot>wb?'over':''}">${fmt(wtot)}</div>
+        <div class="n ${wtot>wc?'over':(wtot>wb?'warn':'')}">${fmt(wtot)}</div>
       </div>
       <div style="text-align:right">
         <div class="lab">Pace</div>
@@ -509,15 +539,20 @@ function render(){
     <div class="bars">` + wd.map((d,i) => {
       const v = dayTotal(d), future = d > t;
       return `<div class="d ${d===t?'today':''}">
-        <div class="bar ${tone(v,B)}" style="height:${future?3:Math.max(3, v/peak*70)}px">
+        <div class="bar ${tone(v,B,C)}" style="height:${future?3:Math.max(3, v/peak*70)}px">
           ${future?'':`<i style="height:100%"></i>`}
         </div>
         <div class="dl">${DAYS[i]}</div>
       </div>`;
     }).join('') + `</div></div>
     <div class="lastwk">
+      <div class="lab">Weekly ceiling ${fmt(wc)}</div>
+      <div class="n strong" style="${wLeft<0?'color:var(--red)':''}">
+        ${wLeft < 0 ? fmt(-wLeft)+' over' : fmt(wLeft)+' left'}</div>
+    </div>
+    <div class="lastwk">
       <div class="lab">Last week</div>
-      <div class="n" style="color:${ltot>wb?'var(--red)':'var(--muted)'}">${fmt(ltot)} / ${fmt(wb)}</div>
+      <div class="n" style="color:${ltot>wc?'var(--red)':(ltot>wb?'var(--amber)':'var(--muted)')}">${fmt(ltot)} / ${fmt(wb)}</div>
     </div>
   </div>`;
 
@@ -564,10 +599,12 @@ function updatePad(){
   el.textContent = fmt(n); el.classList.toggle('zero', !n);
   document.getElementById('kp-go').disabled = !n;
 
-  const left = S.budget - dayTotal(ymd());
-  const after = left - n;
+  const used = dayTotal(ymd());
+  const after = S.budget - used - n, cAfter = S.tdee - used - n;
+  const col = cAfter < 0 ? 'var(--red)' : (after < 0 ? 'var(--amber)' : 'var(--ink)');
   document.getElementById('kp-after').innerHTML = mode==='eat'
-    ? `LEFT AFTER<br><span style="font-size:17px;color:${after<0?'var(--red)':'var(--ink)'};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>`
+    ? `LEFT AFTER<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>`
+      + `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`
     : `LIST WOULD BE<br><span style="font-size:17px;color:var(--ink);font-weight:700">${fmt(listTotal()+n)}</span>`;
 
   document.getElementById('kp-hint').textContent =
@@ -666,6 +703,7 @@ document.addEventListener('click', e => {
   if (a==='close')     return closeSheets();
   if (a==='settings'){
     document.getElementById('budget').value = S.budget;
+    document.getElementById('tdee').value = S.tdee;
     reportStatus();
     return openSheet('settings');
   }
@@ -692,6 +730,7 @@ document.addEventListener('click', e => {
     S = {
       v:1,
       budget: inc.budget > 0 ? inc.budget : DEFAULT_BUDGET,
+      tdee: inc.tdee > 0 ? inc.tdee : DEFAULT_TDEE,
       list: inc.list && inc.list.date === ymd() ? inc.list : {date:ymd(), items:[]},
       days: inc.days,
       recents: Array.isArray(inc.recents) ? inc.recents : []
@@ -757,6 +796,12 @@ document.getElementById('budget').addEventListener('change', e => {
   else e.target.value = S.budget;
 });
 
+document.getElementById('tdee').addEventListener('change', e => {
+  const v = parseInt(e.target.value, 10);
+  if (v > 0 && v < 20000){ S.tdee = v; save(); render(); }
+  else e.target.value = S.tdee;
+});
+
 document.getElementById('label').addEventListener('keydown', e => {
   if (e.key === 'Enter'){ e.preventDefault(); e.target.blur(); if (digits) commit(); }
 });
@@ -813,6 +858,7 @@ if ('serviceWorker' in navigator){
 (async () => {
   S = (await Store.load()) || blank();
   S.budget ||= DEFAULT_BUDGET;
+  S.tdee ||= DEFAULT_TDEE;
   S.days ||= {}; S.recents ||= [];
   S.list ||= {date:ymd(), items:[]};
   rollover();

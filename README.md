@@ -10,9 +10,12 @@ Live at **https://coolengineerguy.github.io/**
 ## Features
 
 - Daily budget with a remaining-today readout and a progress bar
+- A daily expenditure (TDEE) ceiling scored alongside it, so an over-budget day
+  reads as amber rather than red while the week is still under the real burn
 - A shopping list you tick off as you eat, with an "if you finish the list"
-  projection of where the day lands
-- Monday-to-Sunday week view: per-day bars, pace against budget, last week's total
+  projection of where the day lands against both lines
+- Monday-to-Sunday week view: per-day bars, pace against budget, headroom
+  against the weekly ceiling, last week's total
 - Installable as a PWA — launcher icon, no address bar, works offline
 - CSV and JSON export, JSON restore
 - Light and dark themes, following the system setting
@@ -27,8 +30,13 @@ anything left on it at midnight is dropped. Nothing is lost by that, because
 items only enter the log when ticked. Bought something today to eat tomorrow?
 Use **Log eaten** tomorrow rather than the list.
 
-The daily budget is set in Settings, and the weekly budget is that × 7. Changing
-it re-scores every day on display, past ones included.
+Two numbers are set in Settings, and each is multiplied by seven for the week.
+The **daily budget** is what you're aiming at. The **daily expenditure** (TDEE)
+is what you actually burn, and its weekly total is the ceiling — the real upper
+limit. Going over budget on a day or two is a deliberate choice, so the app
+colours it amber; red is reserved for going past the ceiling, where the week is
+in genuine surplus. Changing either re-scores every day on display, past ones
+included.
 
 Eight weeks of daily records are retained, but only the current and previous
 week are ever shown. The extra history exists so the CSV export is worth
