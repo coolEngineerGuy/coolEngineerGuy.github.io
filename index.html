@@ -157,12 +157,13 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 .week .top .n.warn{color:var(--amber)}
 .week .top .n.over{color:var(--red)}
 .bars{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;align-items:end;height:76px}
-.bars .d{display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:5px}
-.bars .bar{border:1px solid var(--rule);border-radius:1px;position:relative;min-height:3px;background:var(--paper)}
+.bars .d{display:flex;flex-direction:column;justify-content:flex-end;width:100%;height:100%;gap:5px}
+.bars .bar{display:block;border:1px solid var(--rule);border-radius:1px;position:relative;min-height:3px;background:var(--paper)}
 .bars .bar i{position:absolute;inset:auto 0 0 0;background:var(--green)}
 .bars .bar.warn i{background:var(--amber)} .bars .bar.over i{background:var(--red)}
 .bars .d.today .bar{border-width:2px}
-.bars .dl{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-align:center;color:var(--muted)}
+.bars .d:active:not(:disabled) .bar{border-color:var(--green)}
+.bars .dl{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-align:center;color:var(--muted)}
 .bars .d.today .dl{color:var(--ink);font-weight:700}
 .lastwk{
   display:flex;justify-content:space-between;align-items:baseline;
@@ -204,6 +205,7 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 }
 .readout .n{font-size:46px;font-weight:800;letter-spacing:-.04em;line-height:1}
 .readout .n.zero{color:var(--muted)}
+.readout .n.warn{color:var(--amber)} .readout .n.over{color:var(--red)}
 .readout .after{text-align:right;font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--muted)}
 #label{
   width:100%;margin-top:10px;padding:12px;border:1px solid var(--rule);border-radius:2px;
@@ -274,7 +276,7 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 <div class="sheet" id="keypad"><div class="in">
   <div class="shead">
     <div class="lab" id="kp-title">Log eaten</div>
-    <button data-a="close">Done</button>
+    <button data-a="close-pad">Done</button>
   </div>
   <div class="readout">
     <div class="n zero" id="kp-n">0</div>
@@ -290,6 +292,17 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
   </div>
   <button class="commit" id="kp-go" disabled>Add</button>
   <div class="hint lab" id="kp-hint"></div>
+</div></div>
+
+<!-- one day, from tapping a bar -->
+<div class="sheet" id="day"><div class="in">
+  <div class="shead">
+    <div class="lab" id="day-title">Day</div>
+    <button data-a="close">Done</button>
+  </div>
+  <div id="day-body"></div>
+  <button class="commit" data-a="day-add">Add to this day</button>
+  <div class="hint lab" id="day-hint"></div>
 </div></div>
 
 <!-- settings -->
@@ -355,11 +368,19 @@ const DEFAULT_TDEE = 3100;
 const KEEP_WEEKS = 8;
 const DAYS = ['M','T','W','T','F','S','S'];
 
-let S = null, curDay = null, mode = 'eat', digits = '';
+let S = null, curDay = null, mode = 'eat', digits = '', dayDate = null;
 
 /* ---------- dates ---------- */
 const pad = n => String(n).padStart(2,'0');
 const ymd = (d=new Date()) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+/* local, not UTC — new Date('2026-07-30') would shift a day west of Greenwich */
+const parseYmd = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const longDate = s => parseYmd(s).toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'short'});
+function relDay(date){
+  if (date === ymd()) return 'today';
+  if (date === ymd(addDays(new Date(),-1))) return 'yesterday';
+  return parseYmd(date).toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'});
+}
 function mondayOf(d=new Date()){
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   x.setDate(x.getDate() - ((x.getDay()+6)%7));
@@ -404,7 +425,7 @@ function save(){
 function rollover(){
   const t = ymd();
   if (S.list.date !== t){ S.list = {date:t, items:[]}; save(); }
-  if (curDay !== t){ curDay = t; render(); }
+  if (curDay !== t){ curDay = t; refresh(); }
 }
 
 /* ---------- render ----------
@@ -503,15 +524,7 @@ function render(){
   if (entries.length){
     h += `<div class="panel">
       <div class="head"><div class="lab">Eaten today</div><div class="lab">${fmt(used)} kcal</div></div>
-      <div class="rows">` + entries.map(e => `
-        <div class="row">
-          <div class="hit" style="cursor:default">
-            <span class="t">${new Date(e.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>
-            <span class="name ${e.label?'':'none'}">${e.label ? esc(e.label) : (e.src==='list'?'From list':'Quick add')}</span>
-            <span class="kcal">${fmt(e.kcal)}</span>
-          </div>
-          ${delBtn('entry', e.id)}
-        </div>`).join('') + `</div></div>`;
+      <div class="rows">` + entries.map(e => entryRow(e, t)).join('') + `</div></div>`;
   }
 
   /* week */
@@ -538,13 +551,15 @@ function render(){
     </div>
     <div class="bars">` + wd.map((d,i) => {
       const v = dayTotal(d), future = d > t;
-      return `<div class="d ${d===t?'today':''}">
-        <div class="bar ${tone(v,B,C)}" style="height:${future?3:Math.max(3, v/peak*70)}px">
+      return `<button class="d ${d===t?'today':''}" ${future?'disabled':`data-a="day" data-d="${d}"`}
+              aria-label="${longDate(d)}${future?', not yet':', '+fmt(v)+' kcal'}">
+        <span class="bar ${tone(v,B,C)}" style="height:${future?3:Math.max(3, v/peak*70)}px">
           ${future?'':`<i style="height:100%"></i>`}
-        </div>
-        <div class="dl">${DAYS[i]}</div>
-      </div>`;
-    }).join('') + `</div></div>
+        </span>
+        <span class="dl">${DAYS[i]}</span>
+      </button>`;
+    }).join('') + `</div>
+    <div class="hint lab">Tap a day to see it, or add to it</div></div>
     <div class="lastwk">
       <div class="lab">Weekly ceiling ${fmt(wc)}</div>
       <div class="n strong" style="${wLeft<0?'color:var(--red)':''}">
@@ -561,28 +576,94 @@ function render(){
 
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+/* One logged entry. Backfilled ones carry the clock time they were typed, which
+ * belongs to a different day than the one they're filed under — so say so
+ * rather than print a time that never happened. */
+function entryRow(e, date){
+  const when = e.src === 'backfill'
+    ? 'ADDED LATER'
+    : new Date(e.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  return `<div class="row">
+    <div class="hit" style="cursor:default">
+      <span class="t">${when}</span>
+      <span class="name ${e.label?'':'none'}">${e.label ? esc(e.label) : (e.src==='list'?'From list':'Quick add')}</span>
+      <span class="kcal">${fmt(e.kcal)}</span>
+    </div>
+    ${delBtn('entry', e.id, date)}
+  </div>`;
+}
+
 /* ---------- two-tap delete ---------- */
 let armed = null, armT = null;
 
-function delBtn(kind, id){
+function delBtn(kind, id, date){
   const on = armed === kind+':'+id;
-  return `<button class="del ${on?'armed':''}" data-a="rm-${kind}" data-id="${id}"
+  return `<button class="del ${on?'armed':''}" data-a="rm-${kind}" data-id="${id}" ${date?`data-d="${date}"`:''}
            aria-label="${on?'Confirm delete':'Delete'}">${on?'Delete?':'×'}</button>`;
 }
 function arm(key){
   armed = key;
   clearTimeout(armT);
-  armT = setTimeout(()=>{ armed = null; render(); }, 3500);
-  render();
+  armT = setTimeout(()=>{ armed = null; refresh(); }, 3500);
+  refresh();
 }
 function disarm(){ if (armed){ armed = null; clearTimeout(armT); } }
+
+/* ---------- one day, opened from a bar ---------- */
+const dayOpen = () => document.getElementById('day').classList.contains('on');
+function refresh(){ render(); if (dayOpen()) renderDay(); }
+
+function openDay(date){
+  dayDate = date;
+  renderDay();
+  openSheet('day');
+}
+
+function renderDay(){
+  const date = dayDate, B = S.budget, C = S.tdee;
+  const used = dayTotal(date), left = B - used, cLeft = C - used;
+  const rel = relDay(date);
+  const entries = (S.days[date]||[]).slice().sort((a,b)=>b.ts-a.ts);
+  const col = cLeft < 0 ? 'var(--red)' : (left < 0 ? 'var(--amber)' : 'var(--ink)');
+
+  document.getElementById('day-title').textContent =
+    rel === 'today' || rel === 'yesterday' ? `${rel} — ${longDate(date)}` : longDate(date);
+
+  let h = `<div class="readout">
+    <div>
+      <div class="n ${used ? tone(used,B,C) : 'zero'}">${fmt(used)}</div>
+      <div class="lab" style="margin-top:7px">kcal logged</div>
+    </div>
+    <div class="after">
+      OF ${fmt(B)}<br>
+      <span style="font-size:17px;font-weight:700;color:${col}">${left<0?'−'+fmt(-left):fmt(left)}</span><br>
+      <span style="color:${cLeft<0?'var(--red)':'var(--muted)'}">${cLeft<0?fmt(-cLeft)+' OVER CEILING':fmt(cLeft)+' TO CEILING'}</span>
+    </div>
+  </div>`;
+
+  h += `<div class="panel" style="margin:10px 0 0">
+    <div class="head">
+      <div class="lab">Logged</div>
+      <div class="lab">${entries.length} entr${entries.length===1?'y':'ies'}</div>
+    </div>`;
+  h += entries.length
+    ? `<div class="rows">` + entries.map(e => entryRow(e, date)).join('') + `</div>`
+    : `<div class="empty">Nothing logged for this day.</div>`;
+  h += `</div>`;
+
+  document.getElementById('day-body').innerHTML = h;
+  document.getElementById('day-hint').textContent =
+    rel === 'today' ? '' : `Anything you add lands on ${longDate(date)}`;
+}
 
 /* ---------- keypad ---------- */
 function openPad(m){
   mode = m; digits = '';
-  document.getElementById('kp-title').textContent = m==='eat' ? 'Log eaten now' : 'Add to list';
+  document.getElementById('kp-title').textContent =
+    m==='eat' ? 'Log eaten now' : m==='list' ? 'Add to list' : `Add to ${relDay(dayDate)}`;
   document.getElementById('label').value = '';
-  document.getElementById('kp-go').textContent = m==='eat' ? 'Log it' : 'Add to list';
+  document.getElementById('kp-go').textContent =
+    m==='eat' ? 'Log it' : m==='list' ? 'Add to list' : 'Add it';
   renderRecents(); updatePad(); openSheet('keypad');
 }
 
@@ -599,16 +680,19 @@ function updatePad(){
   el.textContent = fmt(n); el.classList.toggle('zero', !n);
   document.getElementById('kp-go').disabled = !n;
 
-  const used = dayTotal(ymd());
+  const used = dayTotal(mode==='day' ? dayDate : ymd());
   const after = S.budget - used - n, cAfter = S.tdee - used - n;
   const col = cAfter < 0 ? 'var(--red)' : (after < 0 ? 'var(--amber)' : 'var(--ink)');
-  document.getElementById('kp-after').innerHTML = mode==='eat'
-    ? `LEFT AFTER<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>`
-      + `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`
-    : `LIST WOULD BE<br><span style="font-size:17px;color:var(--ink);font-weight:700">${fmt(listTotal()+n)}</span>`;
+  const ceilLine = `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`;
+  document.getElementById('kp-after').innerHTML =
+    mode==='list' ? `LIST WOULD BE<br><span style="font-size:17px;color:var(--ink);font-weight:700">${fmt(listTotal()+n)}</span>`
+  : mode==='day' ? `DAY WOULD BE ${fmt(used+n)}<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`
+  : `LEFT AFTER<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`;
 
   document.getElementById('kp-hint').textContent =
-    mode==='list' ? 'Stays open — keep adding as you shop' : '';
+    mode==='list' ? 'Stays open — keep adding as you shop'
+  : mode==='day' ? `Lands on ${longDate(dayDate)}`
+  : '';
 }
 
 function commit(){
@@ -617,23 +701,31 @@ function commit(){
   const label = document.getElementById('label').value.trim();
   const t = ymd();
 
-  if (mode === 'eat'){
-    log(t, {id:uid(), kcal, label, ts:Date.now(), src:'manual'});
-    pushRecent(kcal, label);
-    closeSheets();
-  } else {
+  if (mode === 'list'){
     S.list.items.push({id:uid(), kcal, label, eaten:false});
     pushRecent(kcal, label);
     digits = ''; document.getElementById('label').value = '';
     renderRecents(); updatePad();
+    save(); return render();
   }
+
+  const date = mode === 'day' ? dayDate : t;
+  log(date, {id:uid(), kcal, label, ts:Date.now(), src: date===t ? 'manual' : 'backfill'});
+  pushRecent(kcal, label);
   save(); render();
+  if (mode === 'day') closePad(); else closeSheets();
 }
 
 /* ---------- sheets ---------- */
 function openSheet(id){
   document.querySelector('.scrim').classList.add('on');
   document.getElementById(id).classList.add('on');
+}
+/* the keypad sits on top of the day sheet: leaving it goes back there, not out */
+function closePad(){
+  document.getElementById('keypad').classList.remove('on');
+  if (mode === 'day' && dayDate){ renderDay(); openSheet('day'); }
+  else closeSheets();
 }
 function closeSheets(){
   document.querySelector('.scrim').classList.remove('on');
@@ -650,7 +742,9 @@ function toCSV(){
   const rows = [['date','time','kcal','label','source']];
   Object.keys(S.days).sort().forEach(d => {
     S.days[d].slice().sort((a,b)=>a.ts-b.ts).forEach(e => {
-      rows.push([d, new Date(e.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+      /* a backfilled entry's ts is when it was typed, not when it was eaten —
+         leave the time blank rather than write one that isn't true of that day */
+      rows.push([d, e.src==='backfill' ? '' : new Date(e.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
                  e.kcal, (e.label||'').replace(/"/g,'""'), e.src]);
     });
   });
@@ -678,8 +772,8 @@ async function exportAs(kind){
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-a],[data-k],[data-r]');
-  if (!b){ if (armed){ disarm(); render(); } return; }
-  if (armed && !(b.dataset.a || '').startsWith('rm-')){ disarm(); render(); }
+  if (!b){ if (armed){ disarm(); refresh(); } return; }
+  if (armed && !(b.dataset.a || '').startsWith('rm-')){ disarm(); refresh(); }
 
   if (b.dataset.k){
     const k = b.dataset.k;
@@ -701,6 +795,12 @@ document.addEventListener('click', e => {
   if (a==='open-eat')  return openPad('eat');
   if (a==='open-list') return openPad('list');
   if (a==='close')     return closeSheets();
+  if (a==='close-pad') return closePad();
+  if (a==='day')       return openDay(b.dataset.d);
+  if (a==='day-add'){
+    document.getElementById('day').classList.remove('on');
+    return openPad('day');
+  }
   if (a==='settings'){
     document.getElementById('budget').value = S.budget;
     document.getElementById('tdee').value = S.tdee;
@@ -760,27 +860,27 @@ document.addEventListener('click', e => {
       S.days[t] = (S.days[t]||[]).filter(x => x.id !== it.entryId);
       it.eaten = false; delete it.entryId;
     }
-    save(); return render();
+    save(); return refresh();
   }
   if (a==='rm-item'){
     if (armed !== 'item:'+id) return arm('item:'+id);
     disarm();
     S.list.items = S.list.items.filter(i => i.id !== id);
-    save(); return render();
+    save(); return refresh();
   }
   if (a==='rm-entry'){
     if (armed !== 'entry:'+id) return arm('entry:'+id);
     disarm();
-    const t = ymd();
-    S.days[t] = (S.days[t]||[]).filter(x => x.id !== id);
+    const d = b.dataset.d || ymd();
+    S.days[d] = (S.days[d]||[]).filter(x => x.id !== id);
     const it = S.list.items.find(i => i.entryId === id);
     if (it){ it.eaten = false; delete it.entryId; }
-    save(); return render();
+    save(); return refresh();
   }
   if (a==='clear-list'){
     if (S.list.items.some(i=>i.eaten) && !confirm('Ticked items stay in today\'s log. Clear the list?')) return;
     S.list = {date:ymd(), items:[]};
-    save(); return render();
+    save(); return refresh();
   }
   if (a==='wipe'){
     if (!confirm('Erase all data? This cannot be undone.')) return;

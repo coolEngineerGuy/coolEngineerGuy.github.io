@@ -16,6 +16,8 @@ Live at **https://coolengineerguy.github.io/**
   projection of where the day lands against both lines
 - Monday-to-Sunday week view: per-day bars, pace against budget, headroom
   against the weekly ceiling, last week's total
+- Tap any day's bar for that day's total, its entries, and a keypad to add
+  calories you forgot to record at the time
 - Installable as a PWA — launcher icon, no address bar, works offline
 - CSV and JSON export, JSON restore
 - Light and dark themes, following the system setting
@@ -29,6 +31,14 @@ logs it against the day you ticked it, so the list stays a same-day scratchpad �
 anything left on it at midnight is dropped. Nothing is lost by that, because
 items only enter the log when ticked. Bought something today to eat tomorrow?
 Use **Log eaten** tomorrow rather than the list.
+
+**Tapping a bar** in the week view opens that day: its total, what it leaves
+against the budget and the ceiling, and every entry on it. **Add to this day**
+puts a number straight onto that date — for the meal you ate but never recorded.
+Entries added after the fact are marked `backfill` and show *added later* instead
+of a clock time, because the time they were typed isn't the time they were eaten.
+Past entries can be deleted from here too, with the same two-tap confirm as the
+rest of the app. Future days aren't tappable.
 
 Two numbers are set in Settings, and each is multiplied by seven for the week.
 The **daily budget** is what you're aiming at. The **daily expenditure** (TDEE)
@@ -52,7 +62,8 @@ survive clearing browsing data, uninstalling with the "remove data" option, or
 switching browser or phone.
 
 **Export from Settings periodically.** CSV gives one row per entry
-(`date, time, kcal, label, source`) for use in a spreadsheet. JSON is a full
+(`date, time, kcal, label, source`) for use in a spreadsheet; backfilled entries
+have an empty `time`. JSON is a full
 backup that **Restore** reads back in, and is the route onto a new phone.
 
 ## Installing
