@@ -400,7 +400,6 @@ const blank = () => ({
 
 function dayTotal(date){ return (S.days[date]||[]).reduce((a,e)=>a+e.kcal,0); }
 function pendingTotal(){ return S.list.items.filter(i=>!i.eaten).reduce((a,i)=>a+i.kcal,0); }
-function listTotal(){ return S.list.items.reduce((a,i)=>a+i.kcal,0); }
 
 function log(date, entry){ (S.days[date] ||= []).push(entry); }
 
@@ -681,11 +680,14 @@ function updatePad(){
   document.getElementById('kp-go').disabled = !n;
 
   const used = dayTotal(mode==='day' ? dayDate : ymd());
-  const after = S.budget - used - n, cAfter = S.tdee - used - n;
+  /* what's already on the list isn't eaten yet, so it only eats into the room
+     you have left while you're shopping for more of it */
+  const pend = mode==='list' ? pendingTotal() : 0;
+  const after = S.budget - used - pend - n, cAfter = S.tdee - used - pend - n;
   const col = cAfter < 0 ? 'var(--red)' : (after < 0 ? 'var(--amber)' : 'var(--ink)');
   const ceilLine = `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`;
   document.getElementById('kp-after').innerHTML =
-    mode==='list' ? `LIST WOULD BE<br><span style="font-size:17px;color:var(--ink);font-weight:700">${fmt(listTotal()+n)}</span>`
+    mode==='list' ? `ROOM LEFT AFTER LIST<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`
   : mode==='day' ? `DAY WOULD BE ${fmt(used+n)}<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`
   : `LEFT AFTER<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`;
 
