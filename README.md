@@ -14,6 +14,8 @@ Live at **https://coolengineerguy.github.io/**
   reads as amber rather than red while the week is still under the real burn
 - A shopping list you tick off as you eat, with an "if you finish the list"
   projection of where the day lands against both lines
+- A keypad that takes × and ÷ as well as digits, for the sums packaging forces
+  on you — 4 × 96 for a multipack, 132 ÷ 30 × 35 to scale a per-100 g figure
 - Monday-to-Sunday week view: per-day bars, pace against budget, headroom
   against the weekly ceiling, last week's total
 - Tap any day's bar for that day's total, its entries, and a keypad to add
@@ -25,6 +27,13 @@ Live at **https://coolengineerguy.github.io/**
 ## Usage
 
 **Log eaten** records calories against today immediately.
+
+Both entry points share one keypad, and it does multiplication and division so
+you don't have to do the arithmetic before you start typing. Press × or ÷ and
+the sum appears under the figure it makes; the big number is always the kcal
+that will be recorded, rounded to a whole one. Operators evaluate strictly left
+to right, so `132 ÷ 30 × 35` reads as "132 per 30 g, but the bag is 35 g" and
+gives 154. Five digits per number, three operators per sum.
 
 **Add to list** queues an item without logging it. Ticking an item off the list
 logs it against the day you ticked it, so the list stays a same-day scratchpad —

@@ -207,6 +207,8 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 .readout .n.zero{color:var(--muted)}
 .readout .n.warn{color:var(--amber)} .readout .n.over{color:var(--red)}
 .readout .after{text-align:right;font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--muted)}
+/* the tape: the sum you typed, sitting under the figure it makes */
+.readout #kp-expr{font-size:11px;letter-spacing:.07em;margin-top:7px}
 #label{
   width:100%;margin-top:10px;padding:12px;border:1px solid var(--rule);border-radius:2px;
   background:var(--panel);font-size:16px;
@@ -220,13 +222,16 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 }
 .recents b{font-weight:700}
 .recents span{color:var(--muted);margin-left:6px;font-size:12px}
-.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.pad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
 .pad button{
-  padding:17px 0;font-size:25px;font-weight:600;border:1px solid var(--rule);
+  padding:16px 0;font-size:24px;font-weight:600;border:1px solid var(--rule);
   border-radius:2px;background:var(--keypad);
 }
 .pad button:active{background:var(--ink);color:var(--paper)}
-.pad .fn{font-size:15px;font-family:var(--mono);letter-spacing:.06em}
+.pad .fn{font-size:14px;font-family:var(--mono);letter-spacing:.06em}
+/* operators sit in their own column, tinted off the digits */
+.pad .op{font-size:26px;background:var(--panel)}
+.pad .w2{grid-column:span 2}
 .commit{
   width:100%;margin-top:10px;padding:17px;border-radius:2px;border:1.5px solid var(--rule);
   background:var(--ink);color:var(--paper);font-size:16px;font-weight:700;
@@ -279,16 +284,23 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
     <button data-a="close-pad">Done</button>
   </div>
   <div class="readout">
-    <div class="n zero" id="kp-n">0</div>
+    <div>
+      <div class="n zero" id="kp-n">0</div>
+      <div class="lab" id="kp-expr">KCAL</div>
+    </div>
     <div class="after" id="kp-after"></div>
   </div>
   <input id="label" placeholder="Label (optional)" autocomplete="off" enterkeyhint="done">
   <div class="recents" id="recents"></div>
   <div class="pad">
     <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button class="op" data-k="mul" aria-label="Multiply">&times;</button>
     <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button class="op" data-k="div" aria-label="Divide">&divide;</button>
     <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
-    <button class="fn" data-k="clr">CLR</button><button data-k="0">0</button><button class="fn" data-k="del">DEL</button>
+    <button class="fn" data-k="del">DEL</button>
+    <button class="w2" data-k="0">0</button><button data-k="." aria-label="Decimal point">.</button>
+    <button class="fn" data-k="clr">CLR</button>
   </div>
   <button class="commit" id="kp-go" disabled>Add</button>
   <div class="hint lab" id="kp-hint"></div>
@@ -368,7 +380,7 @@ const DEFAULT_TDEE = 3100;
 const KEEP_WEEKS = 8;
 const DAYS = ['M','T','W','T','F','S','S'];
 
-let S = null, curDay = null, mode = 'eat', digits = '', dayDate = null;
+let S = null, curDay = null, mode = 'eat', expr = '', dayDate = null;
 
 /* ---------- dates ---------- */
 const pad = n => String(n).padStart(2,'0');
@@ -655,9 +667,60 @@ function renderDay(){
     rel === 'today' ? '' : `Anything you add lands on ${longDate(date)}`;
 }
 
+/* ---------- keypad arithmetic ----------
+ * The pad holds a small expression rather than a bare number, because packaging
+ * rarely states the figure you want: it's four biscuits at 96 each, or 132 kcal
+ * per 30 g of a 35 g bag. Only × and ÷ are on the pad, so there is no
+ * precedence to respect — evaluate strictly left to right.
+ *
+ * Returns null for an expression that can't be valued (a division by zero). A
+ * trailing operator is ignored rather than fatal, so the readout keeps tracking
+ * the running value while you type.
+ */
+function evalExpr(s){
+  if (!s) return 0;
+  const parts = s.split(/([×÷])/).filter(p => p !== '');
+  let v = parseFloat(parts[0]);
+  if (!isFinite(v)) return null;
+  for (let i = 1; i + 1 < parts.length; i += 2){
+    const b = parseFloat(parts[i+1]);
+    if (!isFinite(b)) break;
+    if (parts[i] === '÷'){ if (b === 0) return null; v /= b; }
+    else v *= b;
+  }
+  return v;
+}
+
+const MAX_DIGITS = 5, MAX_OPS = 3;
+
+/* One key press, folded into the expression. Digits and the point land in the
+ * trailing operand; an operator can't lead, double up, or hang off a point. */
+function press(k){
+  if (k === 'clr'){ expr = ''; return; }
+  if (k === 'del'){ expr = expr.slice(0,-1); return; }
+
+  if (k === 'mul' || k === 'div'){
+    const head = expr.replace(/[×÷.]+$/,'');
+    if (!head || (head.match(/[×÷]/g)||[]).length >= MAX_OPS) return;
+    expr = head + (k === 'mul' ? '×' : '÷');
+    return;
+  }
+
+  const cur = expr.split(/[×÷]/).pop();
+  if (k === '.'){
+    if (!cur.includes('.')) expr += cur ? '.' : '0.';
+    return;
+  }
+  if ((cur.match(/\d/g)||[]).length >= MAX_DIGITS) return;
+  let next = cur + k;
+  /* leading zeros never accumulate — "0" then "5" is 5, not 05 */
+  if (!next.includes('.')) next = next.replace(/^0+/,'');
+  expr = expr.slice(0, expr.length - cur.length) + next;
+}
+
 /* ---------- keypad ---------- */
 function openPad(m){
-  mode = m; digits = '';
+  mode = m; expr = '';
   document.getElementById('kp-title').textContent =
     m==='eat' ? 'Log eaten now' : m==='list' ? 'Add to list' : `Add to ${relDay(dayDate)}`;
   document.getElementById('label').value = '';
@@ -674,39 +737,55 @@ function renderRecents(){
 }
 
 function updatePad(){
-  const n = parseInt(digits||'0', 10);
-  const el = document.getElementById('kp-n');
-  el.textContent = fmt(n); el.classList.toggle('zero', !n);
-  document.getElementById('kp-go').disabled = !n;
+  const val = evalExpr(expr);
+  const n = val === null ? null : Math.round(val);
+  const ok = n !== null && n >= 1 && n <= 99999;
 
+  const el = document.getElementById('kp-n');
+  el.textContent = n === null ? '—' : fmt(n);
+  el.classList.toggle('zero', !ok);
+  document.getElementById('kp-go').disabled = !ok;
+
+  /* the tape, and the exact value whenever it had to be rounded to a kcal */
+  const ex = document.getElementById('kp-expr');
+  if (/[×÷]/.test(expr)){
+    let line = expr.replace(/([×÷])/g, ' $1 ');
+    if (val !== null && Math.abs(val - n) > 0.005) line += ` = ${val.toFixed(2)}`;
+    ex.textContent = line;
+  } else ex.textContent = 'KCAL';
+
+  const kcal = ok ? n : 0;
   const used = dayTotal(mode==='day' ? dayDate : ymd());
   /* what's already on the list isn't eaten yet, so it only eats into the room
      you have left while you're shopping for more of it */
   const pend = mode==='list' ? pendingTotal() : 0;
-  const after = S.budget - used - pend - n, cAfter = S.tdee - used - pend - n;
+  const after = S.budget - used - pend - kcal, cAfter = S.tdee - used - pend - kcal;
   const col = cAfter < 0 ? 'var(--red)' : (after < 0 ? 'var(--amber)' : 'var(--ink)');
   const ceilLine = `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`;
   document.getElementById('kp-after').innerHTML =
     mode==='list' ? `ROOM LEFT AFTER LIST<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`
-  : mode==='day' ? `DAY WOULD BE ${fmt(used+n)}<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`
+  : mode==='day' ? `DAY WOULD BE ${fmt(used+kcal)}<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`
   : `LEFT AFTER<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`;
 
   document.getElementById('kp-hint').textContent =
-    mode==='list' ? 'Stays open — keep adding as you shop'
+    val === null ? 'Cannot divide by zero'
+  : n > 99999 ? 'Too big — 99,999 is the limit'
+  : mode==='list' ? 'Stays open — keep adding as you shop'
   : mode==='day' ? `Lands on ${longDate(dayDate)}`
   : '';
 }
 
 function commit(){
-  const kcal = parseInt(digits||'0', 10);
-  if (!kcal) return;
+  const val = evalExpr(expr);
+  const kcal = val === null ? 0 : Math.round(val);
+  if (!kcal || kcal > 99999) return;
   const label = document.getElementById('label').value.trim();
   const t = ymd();
 
   if (mode === 'list'){
     S.list.items.push({id:uid(), kcal, label, eaten:false});
     pushRecent(kcal, label);
-    digits = ''; document.getElementById('label').value = '';
+    expr = ''; document.getElementById('label').value = '';
     renderRecents(); updatePad();
     save(); return render();
   }
@@ -778,16 +857,13 @@ document.addEventListener('click', e => {
   if (armed && !(b.dataset.a || '').startsWith('rm-')){ disarm(); refresh(); }
 
   if (b.dataset.k){
-    const k = b.dataset.k;
-    if (k==='clr') digits='';
-    else if (k==='del') digits = digits.slice(0,-1);
-    else if (digits.length < 5) digits = (digits + k).replace(/^0+/,'');
+    press(b.dataset.k);
     updatePad(); return;
   }
 
   if (b.dataset.r !== undefined){
     const r = S.recents[+b.dataset.r];
-    digits = String(r.kcal);
+    expr = String(r.kcal);
     document.getElementById('label').value = r.label || '';
     updatePad(); return;
   }
@@ -905,7 +981,7 @@ document.getElementById('tdee').addEventListener('change', e => {
 });
 
 document.getElementById('label').addEventListener('keydown', e => {
-  if (e.key === 'Enter'){ e.preventDefault(); e.target.blur(); if (digits) commit(); }
+  if (e.key === 'Enter'){ e.preventDefault(); e.target.blur(); if (expr) commit(); }
 });
 
 document.addEventListener('visibilitychange', () => { if (!document.hidden) rollover(); });
