@@ -209,19 +209,58 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 .readout .after{text-align:right;font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--muted)}
 /* the tape: the sum you typed, sitting under the figure it makes */
 .readout #kp-expr{font-size:11px;letter-spacing:.07em;margin-top:7px}
-#label{
-  width:100%;margin-top:10px;padding:12px;border:1px solid var(--rule);border-radius:2px;
+/* the label row: the field, and a save-as-food button that keeps its column
+   whether or not it's usable, so the field never resizes as you type */
+.labelrow{display:flex;gap:8px;margin-top:10px}
+.labelrow input{
+  flex:1;min-width:0;padding:12px;border:1px solid var(--rule);border-radius:2px;
   background:var(--panel);font-size:16px;
 }
 #label::placeholder{color:var(--muted)}
-.recents{display:flex;gap:7px;overflow-x:auto;margin-top:10px;padding-bottom:2px;scrollbar-width:none}
-.recents::-webkit-scrollbar{display:none}
-.recents button{
-  flex:0 0 auto;border:1px solid var(--hair);border-radius:2px;padding:8px 11px;
-  font-size:13px;white-space:nowrap;background:var(--panel);
+.labelrow button{
+  flex:0 0 auto;padding:0 13px;border:1px solid var(--rule);border-radius:2px;
+  background:var(--panel);font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;
 }
-.recents b{font-weight:700}
-.recents span{color:var(--muted);margin-left:6px;font-size:12px}
+.labelrow button[disabled]{opacity:.3}
+.labelrow button:active:not([disabled]){background:var(--ink);color:var(--paper)}
+
+/* one-tap chips: saved foods first, then bare recents */
+.striprow{display:flex;gap:8px;margin-top:10px}
+.strip{display:flex;gap:7px;overflow-x:auto;flex:1;min-width:0;padding-bottom:2px;scrollbar-width:none}
+.strip::-webkit-scrollbar{display:none}
+.strip button{
+  flex:0 0 auto;border:1px solid var(--hair);border-radius:2px;padding:10px 12px;
+  font-size:14px;white-space:nowrap;background:var(--panel);
+}
+.strip button.food{border-color:var(--rule)}
+.strip button:active{background:var(--ink);color:var(--paper)}
+.strip b{font-weight:700}
+.strip span{color:var(--muted);margin-left:7px;font-size:12px}
+.strip button:active span{color:var(--paper)}
+.all{
+  flex:0 0 auto;padding:0 12px;border:1px solid var(--rule);border-radius:2px;
+  background:var(--panel);font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);
+}
+.all:active{background:var(--ink);color:var(--paper)}
+
+/* ---- foods ---- */
+#foods-top{position:sticky;top:0;z-index:1;background:var(--paper);padding:1px 0 8px}
+#foods-top .shead{margin-bottom:10px}
+.fsub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:7px}
+.fr{display:flex;align-items:stretch;border-bottom:1px dotted var(--hair)}
+.fr:last-child{border-bottom:none}
+.fr .fhit{flex:1;min-width:0;display:flex;align-items:center;gap:11px;padding:13px 0;text-align:left}
+.fr .fname{flex:1;min-width:0}
+.fr .fname b{display:block;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr .fname .lab{display:block;margin-top:3px}
+.fr .fk{flex:0 0 auto;font-size:17px;font-weight:700}
+.fr .fed{
+  flex:0 0 auto;display:flex;align-items:center;margin-left:14px;padding:0 2px 0 13px;
+  border-left:1px dotted var(--hair);font-family:var(--mono);font-size:10px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+}
 .pad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
 .pad button{
   padding:16px 0;font-size:24px;font-weight:600;border:1px solid var(--rule);
@@ -254,6 +293,7 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 }
 #paste::placeholder{color:var(--muted)}
 .danger{color:var(--red);border-color:var(--red)!important}
+.linkrow button.danger.armed{background:var(--red);color:var(--paper)}
 .note{font-size:12px;color:var(--muted);line-height:1.5;margin:10px 0 0}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -290,8 +330,14 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
     </div>
     <div class="after" id="kp-after"></div>
   </div>
-  <input id="label" placeholder="Label (optional)" autocomplete="off" enterkeyhint="done">
-  <div class="recents" id="recents"></div>
+  <div class="labelrow">
+    <input id="label" placeholder="Label (optional)" autocomplete="off" enterkeyhint="done">
+    <button id="save-food" data-a="save-food" disabled>Save</button>
+  </div>
+  <div class="striprow">
+    <div class="strip" id="strip"></div>
+    <button class="all" data-a="foods-pick" aria-label="All saved foods">Foods</button>
+  </div>
   <div class="pad">
     <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
     <button class="op" data-k="mul" aria-label="Multiply">&times;</button>
@@ -304,6 +350,21 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
   </div>
   <button class="commit" id="kp-go" disabled>Add</button>
   <div class="hint lab" id="kp-hint"></div>
+</div></div>
+
+<!-- saved foods: a picker when it sits over the keypad, a manager from settings -->
+<div class="sheet" id="foods"><div class="in">
+  <!-- title, Done and the running total stay pinned: a long list must not put
+       the way out, or the figure you're spending against, off-screen -->
+  <div id="foods-top">
+    <div class="shead">
+      <div class="lab" id="foods-title">Foods</div>
+      <button data-a="foods-done">Done</button>
+    </div>
+    <div id="foods-head"></div>
+  </div>
+  <div id="foods-body"></div>
+  <div class="hint lab" id="foods-hint"></div>
 </div></div>
 
 <!-- one day, from tapping a bar -->
@@ -333,7 +394,13 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
     <input id="tdee" type="number" inputmode="numeric" min="1" max="20000">
     <p class="note">What you actually burn. The weekly ceiling is this &times; 7 &mdash; the real upper limit, so an over-budget day only shows amber while the week stays under it. Red is reserved for going past the ceiling.</p>
   </div>
-  <div class="lab" style="margin-bottom:6px">Export</div>
+  <div class="lab" style="margin-bottom:6px">Known foods</div>
+  <div class="linkrow"><button data-a="foods-manage">Manage foods</button></div>
+  <p class="note">Name and calories for the things you buy over and over. Saved foods
+  sit as one-tap chips above the keypad and in full under <b>Foods</b>, ready to drop
+  onto the list or log as eaten without typing a number.</p>
+
+  <div class="lab" style="margin:18px 0 6px">Export</div>
   <div class="linkrow">
     <button data-a="csv">CSV</button>
     <button data-a="json">JSON backup</button>
@@ -381,6 +448,9 @@ const KEEP_WEEKS = 8;
 const DAYS = ['M','T','W','T','F','S','S'];
 
 let S = null, curDay = null, mode = 'eat', expr = '', dayDate = null;
+/* foods: the picker's provenance ('pad' picks, 'settings' manages), which food is
+   being edited, and the chip list the keypad is currently showing */
+let foodsFrom = null, editFood = null, padChips = [];
 
 /* ---------- dates ---------- */
 const pad = n => String(n).padStart(2,'0');
@@ -407,7 +477,7 @@ const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const blank = () => ({
   v:1, budget:DEFAULT_BUDGET, tdee:DEFAULT_TDEE,
   list:{date:ymd(), items:[]},
-  days:{}, recents:[]
+  days:{}, recents:[], foods:[]
 });
 
 function dayTotal(date){ return (S.days[date]||[]).reduce((a,e)=>a+e.kcal,0); }
@@ -415,9 +485,56 @@ function pendingTotal(){ return S.list.items.filter(i=>!i.eaten).reduce((a,i)=>a
 
 function log(date, entry){ (S.days[date] ||= []).push(entry); }
 
+/* Recents are the fallback for one-off amounts. Anything that matches a saved
+   food is already a chip, so don't shadow it with a second one. */
 function pushRecent(kcal, label){
+  if (matchFood(kcal, label)) return;
   const k = kcal+'|'+(label||'');
   S.recents = [{kcal,label}, ...S.recents.filter(r => (r.kcal+'|'+(r.label||'')) !== k)].slice(0,8);
+}
+
+/* ---------- saved foods ----------
+ * A food is a name and a number you've decided are worth keeping: the sandwich
+ * you buy every week, the microwave meal that's always 480. Once saved, adding
+ * it is one tap and doesn't need the thing in front of you.
+ */
+/* one cap on the name, wherever it was typed, so a food saved off the keypad's
+   label field is still the same record the editor and a restore would write */
+const NAME_MAX = 40;
+const trimName = s => (s||'').trim().slice(0, NAME_MAX);
+
+const namedFood = name =>
+  S.foods.find(f => f.name.toLowerCase() === trimName(name).toLowerCase());
+const matchFood = (kcal, label) =>
+  S.foods.find(f => f.kcal === kcal && f.name.toLowerCase() === trimName(label).toLowerCase());
+const foodsAZ = () =>
+  S.foods.slice().sort((a,b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+
+/* Same name, new number, is a correction rather than a second food — packaging
+   gets reformulated and the old figure is simply wrong. */
+function upsertFood(name, kcal){
+  name = trimName(name);
+  const f = namedFood(name);
+  if (f) return writeFood(f, name, kcal);
+  const n = {id:uid(), name, kcal, last:Date.now()};
+  S.foods.push(n);
+  return n;
+}
+
+function writeFood(f, name, kcal){
+  f.name = trimName(name); f.kcal = kcal; f.last = Date.now();
+  return f;
+}
+
+function usedFood(f){ if (f) f.last = Date.now(); }
+
+/* How many of this food are already sitting where you're about to put one —
+   the answer to "did I put the sandwich in the basket or only think about it?" */
+function foodCount(f){
+  if (mode === 'list')
+    return S.list.items.filter(i => !i.eaten && i.kcal === f.kcal && i.label === f.name).length;
+  const d = mode === 'day' ? dayDate : ymd();
+  return (S.days[d]||[]).filter(e => e.kcal === f.kcal && e.label === f.name).length;
 }
 
 function prune(){
@@ -605,7 +722,7 @@ function entryRow(e, date){
 }
 
 /* ---------- two-tap delete ---------- */
-let armed = null, armT = null;
+let armed = null, armT = null, foodDelT = null;
 
 function delBtn(kind, id, date){
   const on = armed === kind+':'+id;
@@ -621,7 +738,8 @@ function arm(key){
 function disarm(){ if (armed){ armed = null; clearTimeout(armT); } }
 
 /* ---------- one day, opened from a bar ---------- */
-const dayOpen = () => document.getElementById('day').classList.contains('on');
+const isOn = id => document.getElementById(id).classList.contains('on');
+const dayOpen = () => isOn('day');
 function refresh(){ render(); if (dayOpen()) renderDay(); }
 
 function openDay(date){
@@ -726,14 +844,121 @@ function openPad(m){
   document.getElementById('label').value = '';
   document.getElementById('kp-go').textContent =
     m==='eat' ? 'Log it' : m==='list' ? 'Add to list' : 'Add it';
-  renderRecents(); updatePad(); openSheet('keypad');
+  clearFlash();
+  buildChips(); renderStrip();
+  document.getElementById('strip').scrollLeft = 0;
+  updatePad(); openSheet('keypad');
 }
 
-function renderRecents(){
-  const el = document.getElementById('recents');
-  el.innerHTML = S.recents.map((r,i) =>
-    `<button data-r="${i}"><b>${fmt(r.kcal)}</b>${r.label?`<span>${esc(r.label)}</span>`:''}</button>`
+/* ---------- the chip strip ----------
+ * Saved foods, most recently used first, then any bare recent amounts that no
+ * food already covers. A chip is a whole entry, so one tap commits it.
+ *
+ * The list is built when the sheet opens and left alone while it's open: tapping
+ * a food makes it the most recent, and a strip that resorted itself between taps
+ * would move the next chip out from under your thumb.
+ */
+const CHIP_FOODS = 6, CHIP_MAX = 10;
+
+function buildChips(){
+  const foods = S.foods.slice().sort((a,b) => (b.last||0) - (a.last||0)).slice(0, CHIP_FOODS)
+    .map(f => ({kind:'food', id:f.id, name:f.name, kcal:f.kcal}));
+  const room = Math.max(0, CHIP_MAX - foods.length);
+  const recents = S.recents.filter(r => !matchFood(r.kcal, r.label)).slice(0, room)
+    .map(r => ({kind:'recent', kcal:r.kcal, label:r.label||''}));
+  padChips = foods.concat(recents);
+}
+
+/* Names are cut short on the chips so two or three fit on screen at once, which
+   matters more in an aisle than reading one in full — the sheet has them whole. */
+const short = s => s.length > 18 ? s.slice(0,17)+'…' : s;
+
+function renderStrip(){
+  document.getElementById('strip').innerHTML = padChips.map((c,i) => c.kind === 'food'
+    ? `<button class="food" data-c="${i}" aria-label="Add ${esc(c.name)}, ${fmt(c.kcal)} kcal"`
+      + `><b>${esc(short(c.name))}</b><span>${fmt(c.kcal)}</span></button>`
+    : `<button data-c="${i}" aria-label="Add ${fmt(c.kcal)} kcal${c.label?', '+esc(c.label):''}"`
+      + `><b>${fmt(c.kcal)}</b>${c.label?`<span>${esc(short(c.label))}</span>`:''}</button>`
   ).join('');
+}
+
+/* One tap, one entry — the same thing commit() does, without the pad. Whatever
+   was half-typed is cleared, so the readout goes back to showing the truth. */
+function addQuick(kcal, label, foodId){
+  const t = ymd();
+  if (foodId) usedFood(S.foods.find(f => f.id === foodId));
+  if (mode === 'list'){
+    S.list.items.push({id:uid(), kcal, label, eaten:false});
+  } else {
+    const date = mode === 'day' ? dayDate : t;
+    log(date, {id:uid(), kcal, label, ts:Date.now(), src: date===t ? 'manual' : 'backfill'});
+  }
+  if (!foodId) pushRecent(kcal, label);
+  expr = ''; document.getElementById('label').value = '';
+  save(); refresh();
+}
+
+function addedMsg(label, kcal){
+  const what = `${label || 'Unlabelled'} · ${fmt(kcal)}`;
+  return mode === 'list' ? `Added ${what} to the list`
+       : mode === 'day' ? `Added ${what} to ${relDay(dayDate)}`
+       : `Logged ${what}`;
+}
+
+function chipAdd(i){
+  const c = padChips[i]; if (!c) return;
+  const name = c.kind === 'food' ? c.name : c.label;
+  addQuick(c.kcal, name, c.id);
+  flash(addedMsg(name, c.kcal));
+}
+
+/* ---------- flashes ----------
+ * A one-tap add gives nothing to look at, so say what landed. The line is
+ * shared by the keypad and the foods sheet, whichever is in front. */
+let flashMsg = '', flashT = null;
+function flash(msg){
+  flashMsg = msg;
+  clearTimeout(flashT);
+  flashT = setTimeout(() => { flashMsg = ''; paintFlash(); }, 2400);
+  paintFlash();
+}
+function clearFlash(){ flashMsg = ''; clearTimeout(flashT); }
+function paintFlash(){
+  if (isOn('keypad')) updatePad();
+  if (isOn('foods')) document.getElementById('foods-hint').textContent = flashMsg;
+}
+
+/* What the day looks like once this many kcal are added — the same block under
+   the keypad readout and at the top of the foods picker. */
+function afterHTML(kcal){
+  const used = dayTotal(mode==='day' ? dayDate : ymd());
+  /* what's already on the list isn't eaten yet, so it only eats into the room
+     you have left while you're shopping for more of it */
+  const pend = mode==='list' ? pendingTotal() : 0;
+  const after = S.budget - used - pend - kcal, cAfter = S.tdee - used - pend - kcal;
+  const col = cAfter < 0 ? 'var(--red)' : (after < 0 ? 'var(--amber)' : 'var(--ink)');
+  const n = `<span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>`;
+  const ceilLine = `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`;
+  return mode==='list' ? `ROOM LEFT AFTER LIST<br>${n}${ceilLine}`
+       : mode==='day'  ? `DAY WOULD BE ${fmt(used+kcal)}<br>${n}${ceilLine}`
+       : `LEFT AFTER<br>${n}${ceilLine}`;
+}
+
+function modeHint(){
+  return mode==='list' ? 'Stays open — keep adding as you shop'
+       : mode==='day' ? `Lands on ${longDate(dayDate)}`
+       : '';
+}
+
+/* The save-as-food button, which only means anything with both a number and a
+   name to hang it on. Same name and same number: already saved, nothing to do. */
+function updateSaveBtn(kcal){
+  const btn = document.getElementById('save-food');
+  const name = trimName(document.getElementById('label').value);
+  const f = name ? namedFood(name) : null;
+  const saved = f && kcal && f.kcal === kcal;
+  btn.textContent = saved ? 'Saved' : f ? 'Update' : 'Save';
+  btn.disabled = !name || !kcal || !!saved;
 }
 
 function updatePad(){
@@ -754,25 +979,13 @@ function updatePad(){
     ex.textContent = line;
   } else ex.textContent = 'KCAL';
 
-  const kcal = ok ? n : 0;
-  const used = dayTotal(mode==='day' ? dayDate : ymd());
-  /* what's already on the list isn't eaten yet, so it only eats into the room
-     you have left while you're shopping for more of it */
-  const pend = mode==='list' ? pendingTotal() : 0;
-  const after = S.budget - used - pend - kcal, cAfter = S.tdee - used - pend - kcal;
-  const col = cAfter < 0 ? 'var(--red)' : (after < 0 ? 'var(--amber)' : 'var(--ink)');
-  const ceilLine = `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`;
-  document.getElementById('kp-after').innerHTML =
-    mode==='list' ? `ROOM LEFT AFTER LIST<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`
-  : mode==='day' ? `DAY WOULD BE ${fmt(used+kcal)}<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`
-  : `LEFT AFTER<br><span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>${ceilLine}`;
+  document.getElementById('kp-after').innerHTML = afterHTML(ok ? n : 0);
+  updateSaveBtn(ok ? n : 0);
 
   document.getElementById('kp-hint').textContent =
     val === null ? 'Cannot divide by zero'
   : n > 99999 ? 'Too big — 99,999 is the limit'
-  : mode==='list' ? 'Stays open — keep adding as you shop'
-  : mode==='day' ? `Lands on ${longDate(dayDate)}`
-  : '';
+  : flashMsg || modeHint();
 }
 
 function commit(){
@@ -781,12 +994,16 @@ function commit(){
   if (!kcal || kcal > 99999) return;
   const label = document.getElementById('label').value.trim();
   const t = ymd();
+  /* typed by hand, but if it names a saved food it still counts as using it */
+  usedFood(matchFood(kcal, label));
 
   if (mode === 'list'){
     S.list.items.push({id:uid(), kcal, label, eaten:false});
     pushRecent(kcal, label);
     expr = ''; document.getElementById('label').value = '';
-    renderRecents(); updatePad();
+    /* a typed commit is a slow, deliberate act — safe to resort the strip here,
+       which is how the thing you just typed becomes a chip */
+    buildChips(); renderStrip(); updatePad();
     save(); return render();
   }
 
@@ -795,6 +1012,102 @@ function commit(){
   pushRecent(kcal, label);
   save(); render();
   if (mode === 'day') closePad(); else closeSheets();
+}
+
+/* ---------- foods sheet ----------
+ * One sheet, two jobs. Over the keypad it's a picker: A–Z, one tap per row, the
+ * room-left figure pinned at the top so a run of taps still has a running total
+ * to watch. From settings it's a manager, where a tap edits instead of adds —
+ * because reaching it from there means you came to change something, not to eat.
+ */
+function openFoods(from){
+  foodsFrom = from; editFood = null;
+  document.getElementById(from === 'pad' ? 'keypad' : 'settings').classList.remove('on');
+  renderFoods(); openSheet('foods');
+}
+
+function closeFoods(){
+  editFood = null;
+  document.getElementById('foods').classList.remove('on');
+  if (foodsFrom === 'pad'){ updatePad(); return openSheet('keypad'); }
+  if (foodsFrom === 'settings'){ reportStatus(); return openSheet('settings'); }
+  closeSheets();
+}
+
+function renderFoods(){
+  const pick = foodsFrom === 'pad';
+  const top = document.getElementById('foods-head');
+  const body = document.getElementById('foods-body');
+  document.getElementById('foods-title').textContent =
+    editFood ? (editFood === 'new' ? 'New food' : 'Edit food') : 'Foods';
+
+  /* The editor takes the whole sheet rather than sitting inside the list: with
+     the rows still tappable, one stray tap would rebuild the body and take the
+     half-typed name with it. */
+  if (editFood){
+    const f = editFood === 'new' ? {name:'', kcal:''} : S.foods.find(x => x.id === editFood);
+    if (!f){ editFood = null; return renderFoods(); }
+    top.innerHTML = '';
+    body.innerHTML = `
+      <div class="field">
+        <label class="lab" for="f-name">Name</label>
+        <input id="f-name" autocomplete="off" maxlength="${NAME_MAX}" placeholder="Ham sandwich" value="${esc(f.name)}">
+      </div>
+      <div class="field">
+        <label class="lab" for="f-kcal">Calories</label>
+        <input id="f-kcal" type="number" inputmode="numeric" min="1" max="99999" value="${f.kcal || ''}">
+      </div>
+      <div class="linkrow">
+        <button data-a="food-save">Save</button>
+        <button data-a="food-cancel">Cancel</button>
+      </div>
+      ${editFood === 'new' ? '' : `<div class="linkrow"><button class="danger" data-a="food-del">Delete</button></div>`}`;
+    if (editFood === 'new') document.getElementById('f-name').focus();
+    document.getElementById('foods-hint').textContent = '';
+    return;
+  }
+
+  const list = foodsAZ();
+
+  top.innerHTML = pick
+    ? `<div class="readout">
+        <div>
+          <div class="lab">${mode==='list' ? 'Add to the list' : mode==='day' ? 'Add to '+relDay(dayDate) : 'Log as eaten now'}</div>
+          <div class="fsub">${list.length} saved${list.length>1?' · A–Z':''}</div>
+        </div>
+        <div class="after">${afterHTML(0)}</div>
+      </div>`
+    : `<p class="note" style="margin:0">The things you buy over and over. Tap one to
+       change its name or calories.</p>`;
+
+  let h = `<div class="panel" style="margin:10px 0 0">
+    <div class="head">
+      <div class="lab">${pick ? 'Tap to add' : 'Saved foods'}</div>
+      <div class="lab">${list.length} food${list.length===1?'':'s'}</div>
+    </div>`;
+
+  h += list.length
+    ? `<div class="rows">` + list.map(f => {
+        const c = pick ? foodCount(f) : 0;
+        return `<div class="fr">
+          <button class="fhit" data-a="${pick?'food-add':'food-edit'}" data-id="${f.id}">
+            <span class="fname">
+              <b>${esc(f.name)}</b>
+              ${c ? `<span class="lab">${mode==='list' ? 'On the list' : 'Logged'} &times;${c}</span>` : ''}
+            </span>
+            <span class="fk">${fmt(f.kcal)}</span>
+          </button>
+          ${pick ? `<button class="fed" data-a="food-edit" data-id="${f.id}" aria-label="Edit ${esc(f.name)}">Edit</button>` : ''}
+        </div>`;
+      }).join('') + `</div>`
+    : `<div class="empty">No saved foods yet.<br>
+       Type an amount and a name on the keypad, then tap <b>Save</b>.</div>`;
+
+  h += `</div>
+    <div class="linkrow" style="margin-top:10px"><button data-a="food-new">Add a food</button></div>`;
+
+  body.innerHTML = h;
+  document.getElementById('foods-hint').textContent = flashMsg;
 }
 
 /* ---------- sheets ---------- */
@@ -811,6 +1124,7 @@ function closePad(){
 function closeSheets(){
   document.querySelector('.scrim').classList.remove('on');
   document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'));
+  foodsFrom = null; editFood = null; clearFlash();
   document.getElementById('dump').style.display='none';
   document.getElementById('exp-note').textContent='';
   const p = document.getElementById('paste');
@@ -852,7 +1166,7 @@ async function exportAs(kind){
 
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-a],[data-k],[data-r]');
+  const b = e.target.closest('[data-a],[data-k],[data-c]');
   if (!b){ if (armed){ disarm(); refresh(); } return; }
   if (armed && !(b.dataset.a || '').startsWith('rm-')){ disarm(); refresh(); }
 
@@ -861,12 +1175,7 @@ document.addEventListener('click', e => {
     updatePad(); return;
   }
 
-  if (b.dataset.r !== undefined){
-    const r = S.recents[+b.dataset.r];
-    expr = String(r.kcal);
-    document.getElementById('label').value = r.label || '';
-    updatePad(); return;
-  }
+  if (b.dataset.c !== undefined) return chipAdd(+b.dataset.c);
 
   const a = b.dataset.a, id = b.dataset.id;
 
@@ -879,6 +1188,73 @@ document.addEventListener('click', e => {
     document.getElementById('day').classList.remove('on');
     return openPad('day');
   }
+  /* keep the typed amount and name — saving a food doesn't add one, so the
+     commit button is still there to be pressed */
+  if (a==='save-food'){
+    const val = evalExpr(expr);
+    const kcal = val === null ? 0 : Math.round(val);
+    const name = trimName(document.getElementById('label').value);
+    if (!name || kcal < 1 || kcal > 99999) return;
+    const f = upsertFood(name, kcal);
+    buildChips(); renderStrip();
+    document.getElementById('strip').scrollLeft = 0;
+    save(); flash(`Saved ${f.name} · ${fmt(f.kcal)} kcal`);
+    return;
+  }
+
+  if (a==='foods-pick')   return openFoods('pad');
+  if (a==='foods-manage') return openFoods('settings');
+  if (a==='foods-done')   return closeFoods();
+
+  if (a==='food-add'){
+    const f = S.foods.find(x => x.id === id); if (!f) return;
+    addQuick(f.kcal, f.name, f.id);
+    renderFoods(); flash(addedMsg(f.name, f.kcal));
+    return;
+  }
+  if (a==='food-edit'){ editFood = id; return renderFoods(); }
+  if (a==='food-new'){ editFood = 'new'; return renderFoods(); }
+  if (a==='food-cancel'){ editFood = null; return renderFoods(); }
+  if (a==='food-save'){
+    const name = document.getElementById('f-name').value.trim();
+    const kcal = Math.round(parseFloat(document.getElementById('f-kcal').value));
+    if (!name || !(kcal >= 1 && kcal <= 99999)){
+      document.getElementById('foods-hint').textContent = 'Needs a name and a number from 1 to 99,999';
+      return;
+    }
+    const f = S.foods.find(x => x.id === editFood);
+    if (f){
+      /* renamed onto another food's name: fold the two together rather than
+         leave two rows that claim to be the same thing */
+      const clash = namedFood(name);
+      if (clash && clash !== f) S.foods = S.foods.filter(x => x !== clash);
+      writeFood(f, name, kcal);
+    } else upsertFood(name, kcal);
+    editFood = null;
+    buildChips(); renderStrip();
+    save(); renderFoods(); flash(`Saved ${name} · ${fmt(kcal)} kcal`);
+    return;
+  }
+  /* armed in place, not through refresh(), so the editor's fields survive it */
+  if (a==='food-del'){
+    if (!b.classList.contains('armed')){
+      b.classList.add('armed'); b.textContent = 'Really delete?';
+      clearTimeout(foodDelT);
+      foodDelT = setTimeout(() => {
+        b.classList.remove('armed'); b.textContent = 'Delete';
+      }, 3500);
+      return;
+    }
+    clearTimeout(foodDelT);
+    const gone = S.foods.find(x => x.id === editFood);
+    S.foods = S.foods.filter(x => x.id !== editFood);
+    editFood = null;
+    buildChips(); renderStrip();
+    save(); renderFoods();
+    if (gone) flash(`Deleted ${gone.name}`);
+    return;
+  }
+
   if (a==='settings'){
     document.getElementById('budget').value = S.budget;
     document.getElementById('tdee').value = S.tdee;
@@ -911,7 +1287,11 @@ document.addEventListener('click', e => {
       tdee: inc.tdee > 0 ? inc.tdee : DEFAULT_TDEE,
       list: inc.list && inc.list.date === ymd() ? inc.list : {date:ymd(), items:[]},
       days: inc.days,
-      recents: Array.isArray(inc.recents) ? inc.recents : []
+      recents: Array.isArray(inc.recents) ? inc.recents : [],
+      foods: (Array.isArray(inc.foods) ? inc.foods : [])
+        .filter(f => f && typeof f.name === 'string' && f.name.trim() && f.kcal > 0)
+        .map(f => ({id: f.id || uid(), name: trimName(f.name),
+                    kcal: Math.round(f.kcal), last: f.last || 0}))
     };
     save(); closeSheets(); render();
     return alert('Restored.');
@@ -984,6 +1364,9 @@ document.getElementById('label').addEventListener('keydown', e => {
   if (e.key === 'Enter'){ e.preventDefault(); e.target.blur(); if (expr) commit(); }
 });
 
+/* the save-as-food button tracks the name as it's typed */
+document.getElementById('label').addEventListener('input', updatePad);
+
 document.addEventListener('visibilitychange', () => { if (!document.hidden) rollover(); });
 setInterval(rollover, 30000);
 
@@ -1037,7 +1420,7 @@ if ('serviceWorker' in navigator){
   S = (await Store.load()) || blank();
   S.budget ||= DEFAULT_BUDGET;
   S.tdee ||= DEFAULT_TDEE;
-  S.days ||= {}; S.recents ||= [];
+  S.days ||= {}; S.recents ||= []; S.foods ||= [];
   S.list ||= {date:ymd(), items:[]};
   rollover();
   render();

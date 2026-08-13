@@ -16,6 +16,9 @@ Live at **https://coolengineerguy.github.io/**
   projection of where the day lands against both lines
 - A keypad that takes × and ÷ as well as digits, for the sums packaging forces
   on you — 4 × 96 for a multipack, 132 ÷ 30 × 35 to scale a per-100 g figure
+- Saved foods: a name and a number for the things you buy over and over, added
+  to the list or logged as eaten in a single tap, without the packet in front of
+  you
 - Monday-to-Sunday week view: per-day bars, pace against budget, headroom
   against the weekly ceiling, last week's total
 - Tap any day's bar for that day's total, its entries, and a keypad to add
@@ -41,6 +44,42 @@ anything left on it at midnight is dropped. Nothing is lost by that, because
 items only enter the log when ticked. Bought something today to eat tomorrow?
 Use **Log eaten** tomorrow rather than the list.
 
+## Saved foods
+
+If you eat the same sandwich most weeks, its number shouldn't have to be
+retyped, or remembered while you're standing in the shop holding something else.
+
+**Saving one.** Type the amount and a name on the keypad and tap **Save** beside
+the name field. That only saves the food — the entry itself still needs the
+button underneath, so you can save something without eating it. Type the same
+name again with a different number and the button reads **Update**: packaging
+gets reformulated, and two rows claiming to be the same sandwich are worse than
+one that's current. Foods can also be typed straight in from **Foods → Add a
+food**, or **Settings → Manage foods**, for filling the list in at the kitchen
+table rather than in an aisle.
+
+**Using one.** Saved foods sit as chips above the keypad, the six most recently
+used first. A chip is a whole entry, so **one tap commits it** — to the list in
+**Add to list**, to today in **Log eaten**, to whichever day you opened in the
+week view. Tap three chips and three things are on the list; the readout above
+keeps score as you go. Anything half-typed is cleared when you tap a chip, so
+the big number never claims something that wasn't recorded.
+
+The strip is built when the sheet opens and left in that order until it closes.
+Tapping a food makes it the most recently used, but a strip that resorted itself
+between taps would move the next chip out from under your thumb.
+
+**Finding the rest.** **Foods**, at the right-hand end of the strip, lists every
+saved food A–Z, one tap per row to add, with the room-you-have-left figure and
+the way out both pinned to the top of a long list. Rows show *on the list ×2* or
+*logged ×1* where they apply, which is the answer to "did I put the sandwich in
+the basket or only think about it?". **Edit** on a row changes its name or
+number, or deletes it.
+
+Bare amounts you've used recently still appear as chips after the foods, unnamed
+and unremembered, for one-offs that aren't worth saving. They behave the same
+way: one tap adds them. An amount that matches a saved food isn't listed twice.
+
 **Tapping a bar** in the week view opens that day: its total, what it leaves
 against the budget and the ceiling, and every entry on it. **Add to this day**
 puts a number straight onto that date — for the meal you ate but never recorded.
@@ -64,7 +103,8 @@ something.
 ## Data
 
 Everything lives in `localStorage` under the key `calcount:v1`, scoped to the
-origin serving the app. Nothing is transmitted anywhere.
+origin serving the app — settings, day records, today's list, and your saved
+foods. Nothing is transmitted anywhere.
 
 It survives closing the app, rebooting, and deploying updates. It does not
 survive clearing browsing data, uninstalling with the "remove data" option, or
@@ -72,8 +112,8 @@ switching browser or phone.
 
 **Export from Settings periodically.** CSV gives one row per entry
 (`date, time, kcal, label, source`) for use in a spreadsheet; backfilled entries
-have an empty `time`. JSON is a full
-backup that **Restore** reads back in, and is the route onto a new phone.
+have an empty `time`. JSON is a full backup — day records, settings and saved
+foods — that **Restore** reads back in, and is the route onto a new phone.
 
 ## Installing
 
