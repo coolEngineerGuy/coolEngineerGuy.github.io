@@ -23,6 +23,10 @@ Live at **https://coolengineerguy.github.io/**
   against the weekly ceiling, last week's total
 - Tap any day's bar for that day's total, its entries, and a keypad to add
   calories you forgot to record at the time
+- History: every week still on record, in that same week view, stepped through a
+  week at a time
+- A trend line by day or by week, drawn against the same budget and ceiling, with
+  a cursor you drag to read any point off it
 - Installable as a PWA — launcher icon, no address bar, works offline
 - CSV and JSON export, JSON restore
 - Light and dark themes, following the system setting
@@ -96,9 +100,36 @@ colours it amber; red is reserved for going past the ceiling, where the week is
 in genuine surplus. Changing either re-scores every day on display, past ones
 included.
 
-Eight weeks of daily records are retained, but only the current and previous
-week are ever shown. The extra history exists so the CSV export is worth
-something.
+Eight weeks of daily records are retained. The front page stays on this week and
+last week's total; everything else is under **History**. Days older than the
+window are dropped as new ones arrive, so export if you want to keep them.
+
+## History
+
+**History & trend**, at the foot of the week panel, opens the record. The top of
+the sheet is the same week block the front page shows — the same bars, the same
+budget and ceiling lines — with **‹** and **›** to step a week at a time, as far
+back as the retention window goes. Bars stay tappable, so a day eight weeks ago
+opens exactly as today's does, entries and all, and **Done** comes back to the
+week you were looking at rather than dumping you on the front page.
+
+Underneath is the trend, toggled between **Days** and **Weeks**. Both are drawn
+against two dashed rules: amber where the daily budget sits, red where the
+expenditure ceiling does, each multiplied by seven in the weeks view. A point
+above the amber line is an amber day; above the red one the week is in genuine
+surplus. That is the whole legend — there are no axis numbers to squint at.
+
+The figure comes from the cursor instead. Drag across the plot and the readout
+above it names the day or week under your thumb and what it came to; lift your
+thumb and the week block above steps to that week, which makes the line a way of
+getting somewhere as well as something to look at. The most recent point is
+selected by default, drawn hollow because a day or week still in progress is not
+a finished one.
+
+In the days view, a day you logged nothing on breaks the line rather than
+dropping to zero — not logging is not the same as not eating, and a floor-scraping
+dive would claim otherwise. Weeks are totals, so a week you barely used the app
+is simply a low one.
 
 ## Data
 

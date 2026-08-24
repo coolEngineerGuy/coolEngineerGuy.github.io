@@ -296,6 +296,45 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 .linkrow button.danger.armed{background:var(--red);color:var(--paper)}
 .note{font-size:12px;color:var(--muted);line-height:1.5;margin:10px 0 0}
 
+/* ---- history: the week stepper ---- */
+.step{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.step button{
+  flex:0 0 auto;width:46px;height:46px;border:1px solid var(--rule);border-radius:2px;
+  background:var(--panel);font-size:24px;line-height:1;display:grid;place-items:center;
+}
+.step button[disabled]{opacity:.28}
+.step button:active:not([disabled]){background:var(--ink);color:var(--paper)}
+.step .mid{flex:1;min-width:0;text-align:center}
+.step .rng{font-size:18px;font-weight:700;letter-spacing:-.01em;margin-top:3px}
+
+/* ---- trend chart ----
+   Geometry in the SVG, every word of text in HTML around it: a phone renders
+   this box anywhere from 330 to 490px wide, and text scaled with the viewBox
+   would be unreadable at the bottom of that range. */
+.chart{padding:13px 12px}
+.chart .chead{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}
+.seg{display:flex;border:1px solid var(--rule);border-radius:2px;overflow:hidden;flex:0 0 auto}
+.seg button{
+  padding:8px 13px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);background:var(--panel);
+}
+.seg button + button{border-left:1px solid var(--rule)}
+.seg button.on{background:var(--ink);color:var(--paper)}
+.chart .readout .n{font-size:30px}
+.chart .readout .after{text-transform:uppercase}
+/* the plot is touched to read a figure off it, so it must not swallow a
+   vertical scroll — pan-y keeps the sheet scrollable and leaves us the
+   horizontal drags */
+.chart .hit{margin-top:11px;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.chart .hit svg{display:block;width:100%;height:auto}
+.xax{display:flex;justify-content:space-between;gap:8px;margin-top:7px}
+.leg{
+  display:flex;gap:15px;flex-wrap:wrap;margin-top:11px;padding-top:10px;
+  border-top:1px dashed var(--hair);
+}
+.leg span{display:inline-flex;align-items:center;gap:6px}
+.leg i{width:15px;height:0;border-top:1.5px dashed currentColor;display:inline-block}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 :focus-visible{outline:2px solid var(--green);outline-offset:2px}
 </style>
@@ -371,11 +410,20 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 <div class="sheet" id="day"><div class="in">
   <div class="shead">
     <div class="lab" id="day-title">Day</div>
-    <button data-a="close">Done</button>
+    <button data-a="close-day">Done</button>
   </div>
   <div id="day-body"></div>
   <button class="commit" data-a="day-add">Add to this day</button>
   <div class="hint lab" id="day-hint"></div>
+</div></div>
+
+<!-- history: any week still on record, and the long view under it -->
+<div class="sheet" id="history"><div class="in">
+  <div class="shead">
+    <div class="lab">History</div>
+    <button data-a="close">Done</button>
+  </div>
+  <div id="history-body"></div>
 </div></div>
 
 <!-- settings -->
@@ -451,6 +499,9 @@ let S = null, curDay = null, mode = 'eat', expr = '', dayDate = null;
 /* foods: the picker's provenance ('pad' picks, 'settings' manages), which food is
    being edited, and the chip list the keypad is currently showing */
 let foodsFrom = null, editFood = null, padChips = [];
+/* history: the week on show, whether the trend is drawn by day or by week, the
+   point under your thumb, and where the day sheet should go back to */
+let histMon = null, chartMode = 'day', scrub = null, dayFrom = null;
 
 /* ---------- dates ---------- */
 const pad = n => String(n).padStart(2,'0');
@@ -470,6 +521,19 @@ function mondayOf(d=new Date()){
 }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 const weekDates = mon => Array.from({length:7},(_,i)=>ymd(addDays(mon,i)));
+/* "17–23 Aug", or "31 Aug – 6 Sep" when the week straddles two months */
+function weekRange(mon){
+  const b = addDays(mon,6);
+  const m = d => d.toLocaleDateString('en-GB',{month:'short'});
+  return mon.getMonth() === b.getMonth()
+    ? `${mon.getDate()}–${b.getDate()} ${m(b)}`
+    : `${mon.getDate()} ${m(mon)} – ${b.getDate()} ${m(b)}`;
+}
+/* how far back a week sits, said the way you'd say it out loud */
+function relWeek(mon){
+  const n = Math.round((mondayOf() - mon) / 604800000);
+  return n <= 0 ? 'This week' : n === 1 ? 'Last week' : `${n} weeks ago`;
+}
 const fmt = n => Math.round(n).toLocaleString('en-GB');
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
@@ -656,24 +720,38 @@ function render(){
   }
 
   /* week */
-  const mon = mondayOf(), wd = weekDates(mon), wb = B*7, wc = C*7;
-  const wtot = wd.reduce((a,d)=>a+dayTotal(d),0);
-  const lwd = weekDates(addDays(mon,-7));
-  const ltot = lwd.reduce((a,d)=>a+dayTotal(d),0);
-  const peak = Math.max(C, B*1.15, ...wd.map(dayTotal), 1);
-  const elapsed = wd.filter(d => d <= t).length;
-  const wLeft = wc - wtot;
+  h += weekBlock(mondayOf(), true);
 
-  h += `<div class="panel"><div class="week">
+  document.getElementById('app').innerHTML = h;
+}
+
+/* ---------- one week, scored ----------
+ * The live week on the front page and any week you step back to in history are
+ * the same block: same bars, same two lines, so a past week reads exactly the
+ * way this one does. `live` adds what only makes sense for the week in progress
+ * — the pace figure, last week's total, and the way through to history.
+ */
+function weekBlock(mon, live){
+  const t = ymd(), B = S.budget, C = S.tdee, wb = B*7, wc = C*7;
+  const wd = weekDates(mon);
+  const wtot = wd.reduce((a,d)=>a+dayTotal(d),0);
+  const peak = Math.max(C, B*1.15, ...wd.map(dayTotal), 1);
+  /* days of this week that have happened: 7 for a finished week, which turns the
+     pace figure into plain over/under budget — and says so */
+  const elapsed = wd.filter(d => d <= t).length;
+  const done = elapsed === 7;
+  const off = wtot - B*elapsed, wLeft = wc - wtot;
+
+  let h = `<div class="panel"><div class="week">
     <div class="top">
       <div>
-        <div class="lab">This week vs ${fmt(wb)}</div>
+        <div class="lab">${live ? 'This week' : 'Week total'} vs ${fmt(wb)}</div>
         <div class="n ${wtot>wc?'over':(wtot>wb?'warn':'')}">${fmt(wtot)}</div>
       </div>
       <div style="text-align:right">
-        <div class="lab">Pace</div>
+        <div class="lab">${done ? 'Vs budget' : 'Pace'}</div>
         <div class="v" style="font-family:var(--mono);font-size:13px;margin-top:3px">
-          ${elapsed ? (wtot - B*elapsed >= 0 ? '+' : '−') + fmt(Math.abs(wtot - B*elapsed)) : '—'}
+          ${elapsed ? (off >= 0 ? '+' : '−') + fmt(Math.abs(off)) : '—'}
         </div>
       </div>
     </div>
@@ -692,14 +770,221 @@ function render(){
       <div class="lab">Weekly ceiling ${fmt(wc)}</div>
       <div class="n strong" style="${wLeft<0?'color:var(--red)':''}">
         ${wLeft < 0 ? fmt(-wLeft)+' over' : fmt(wLeft)+' left'}</div>
-    </div>
-    <div class="lastwk">
+    </div>`;
+
+  if (live){
+    const ltot = weekDates(addDays(mon,-7)).reduce((a,d)=>a+dayTotal(d),0);
+    h += `<div class="lastwk">
       <div class="lab">Last week</div>
       <div class="n" style="color:${ltot>wc?'var(--red)':(ltot>wb?'var(--amber)':'var(--muted)')}">${fmt(ltot)} / ${fmt(wb)}</div>
     </div>
+    <div class="acts"><button data-a="history">History &amp; trend</button></div>`;
+  }
+
+  return h + `</div>`;
+}
+
+/* ---------- history ----------
+ * The front page is deliberately about today and this week. Everything else the
+ * retention window still holds lives here: the same week block stepped back a
+ * week at a time, and a line underneath for the shape of the whole record.
+ */
+
+/* Where the record starts — the retention cut, or the first day you actually
+   logged, whichever is later. Both the stepper and the chart begin there. */
+function firstMonday(){
+  const cur = mondayOf();
+  const floor = addDays(cur, -7*KEEP_WEEKS);
+  const keys = Object.keys(S.days).filter(d => (S.days[d]||[]).length).sort();
+  if (!keys.length) return cur;
+  const first = mondayOf(parseYmd(keys[0]));
+  return first < floor ? floor : first;
+}
+
+function openHistory(){
+  histMon = mondayOf(); scrub = null;
+  renderHistory(); openSheet('history');
+}
+
+function renderHistory(){
+  const cur = mondayOf(), first = firstMonday();
+  if (!histMon) histMon = cur;
+  /* clamp: the day may have rolled over, or a prune moved the floor, since the
+     sheet was opened */
+  if (ymd(histMon) < ymd(first)) histMon = first;
+  if (ymd(histMon) > ymd(cur)) histMon = cur;
+  const back = ymd(histMon) > ymd(first), fwd = ymd(histMon) < ymd(cur);
+
+  document.getElementById('history-body').innerHTML = `
+    <div class="step">
+      <button data-a="hist-prev" ${back?'':'disabled'} aria-label="Earlier week">‹</button>
+      <div class="mid">
+        <div class="lab">${relWeek(histMon)}</div>
+        <div class="rng">${weekRange(histMon)}</div>
+      </div>
+      <button data-a="hist-next" ${fwd?'':'disabled'} aria-label="Later week">›</button>
+    </div>`
+    + weekBlock(histMon, false)
+    + `<div class="panel"><div class="chart" id="chart">${chartInner()}</div></div>`
+    + `<p class="note">${KEEP_WEEKS} weeks of daily records are kept — older days are
+       dropped as new ones arrive. Export a CSV or JSON backup from Settings to
+       keep them for longer.</p>`;
+}
+
+/* ---------- the trend line ----------
+ * Days or weeks, on one axis, against the same two lines the rest of the app
+ * scores against: amber where the budget sits, red where the ceiling does. Above
+ * the amber line is an amber day; above the red one the week is in surplus. That
+ * makes the picture readable without a single axis label.
+ *
+ * A day you logged nothing on is not a day you ate nothing, so it breaks the
+ * line rather than diving to the floor. Weeks are totals, so a thin week is
+ * simply a low one and there's nothing to break.
+ */
+/* the side padding is the highlight ring's radius, so the cursor on the first or
+   last point is not half-clipped by the edge of the box */
+const CH = {w:480, h:150, padT:12, padB:10, padL:7, padR:7};
+
+const toneCol = (v,b,c) => ({ok:'var(--green)', warn:'var(--amber)', over:'var(--red)'})[tone(v,b,c)];
+const lastLogged = pts => { for (let i=pts.length-1;i>=0;i--) if (pts[i].has) return i; return 0; };
+
+function series(){
+  const t = ymd(), start = firstMonday(), out = [];
+  if (chartMode === 'week'){
+    const last = ymd(mondayOf());
+    for (let m = new Date(start); ymd(m) <= last; m = addDays(m,7)){
+      const wd = weekDates(m);
+      out.push({
+        key: ymd(m), label: weekRange(m),
+        v: wd.reduce((a,d)=>a+dayTotal(d),0),
+        has: wd.some(d => (S.days[d]||[]).length),
+        partial: ymd(m) === last
+      });
+    }
+    return out;
+  }
+  for (let d = new Date(start); ymd(d) <= t; d = addDays(d,1)){
+    const k = ymd(d);
+    out.push({
+      key:k, label:parseYmd(k).toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'}),
+      v:dayTotal(k), has:(S.days[k]||[]).length > 0, partial:k === t
+    });
+  }
+  return out;
+}
+
+function chartInner(){
+  const wk = chartMode === 'week';
+  let h = `<div class="chead">
+    <div class="lab">Trend</div>
+    <div class="seg">
+      <button data-a="ch-day" class="${wk?'':'on'}">Days</button>
+      <button data-a="ch-week" class="${wk?'on':''}">Weeks</button>
+    </div>
   </div>`;
 
-  document.getElementById('app').innerHTML = h;
+  const pts = series(), logged = pts.filter(p => p.has);
+  if (!logged.length)
+    return h + `<div class="empty">Nothing logged yet.<br>Once a few days are in, they draw a line here.</div>`;
+
+  const B = S.budget*(wk?7:1), C = S.tdee*(wk?7:1);
+  const n = pts.length;
+  /* the ceiling is always on the picture, even in a week that never came near it */
+  const roof = Math.max(C, B, ...logged.map(p=>p.v)) * 1.08;
+  const X = i => n===1 ? CH.w/2 : +(CH.padL + i*(CH.w-CH.padL-CH.padR)/(n-1)).toFixed(1);
+  const Y = v => +(CH.padT + (1 - v/roof)*(CH.h-CH.padT-CH.padB)).toFixed(1);
+
+  /* the cursor sits where you last touched, or on the most recent point */
+  const si = scrub === null ? lastLogged(pts) : Math.max(0, Math.min(n-1, scrub));
+  const sp = pts[si];
+
+  h += `<div class="readout">
+    <div>
+      <div class="n ${sp.has ? tone(sp.v,B,C) : 'zero'}">${sp.has ? fmt(sp.v) : '—'}</div>
+      <div class="lab" style="margin-top:6px">${sp.has ? (wk?'kcal that week':'kcal that day') : 'nothing logged'}</div>
+    </div>
+    <div class="after">${sp.label}${sp.partial ? '<br>so far' : ''}</div>
+  </div>`;
+
+  let d = '', run = false;
+  pts.forEach((p,i) => {
+    if (!p.has){ run = false; return; }
+    d += `${run?'L':'M'}${X(i)} ${Y(p.v)}`;
+    run = true;
+  });
+
+  /* a point still filling up is hollow — today's total is not yet a day's */
+  const dots = pts.map((p,i) => !p.has ? '' :
+    `<circle cx="${X(i)}" cy="${Y(p.v)}" r="${p.partial?3.2:2.6}"
+      fill="${p.partial?'var(--panel)':toneCol(p.v,B,C)}" stroke="${toneCol(p.v,B,C)}"
+      stroke-width="${p.partial?1.6:0}" vector-effect="non-scaling-stroke"/>`).join('');
+
+  const rule = (v,col,dash) =>
+    `<line x1="0" y1="${Y(v)}" x2="${CH.w}" y2="${Y(v)}" stroke="${col}" stroke-width="1"
+      ${dash?`stroke-dasharray="${dash}"`:''} vector-effect="non-scaling-stroke"/>`;
+
+  h += `<div class="hit" id="chart-hit">
+    <svg viewBox="0 0 ${CH.w} ${CH.h}" role="img"
+         aria-label="${wk?'Weekly totals':'Daily totals'}, ${logged.length} point${logged.length===1?'':'s'}">
+      ${rule(0,'var(--hair)')}
+      ${rule(B,'var(--amber)','5 4')}
+      ${rule(C,'var(--red)','2 3')}
+      <line x1="${X(si)}" y1="${CH.padT-6}" x2="${X(si)}" y2="${Y(0)}"
+            stroke="var(--muted)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      <path d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.6"
+            stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      ${dots}
+      ${sp.has ? `<circle cx="${X(si)}" cy="${Y(sp.v)}" r="5.5" fill="none" stroke="var(--ink)"
+                   stroke-width="1.6" vector-effect="non-scaling-stroke"/>` : ''}
+    </svg>
+  </div>`;
+
+  /* three dates, at the ends and the middle: enough to place the line in time,
+     and the cursor names any point exactly */
+  const xlab = i => wk ? pts[i].label
+    : parseYmd(pts[i].key).toLocaleDateString('en-GB',{day:'numeric', month:'short'});
+  const marks = [...new Set([0, Math.floor((n-1)/2), n-1])];
+  h += `<div class="xax">` + marks.map(i => `<span class="lab">${xlab(i)}</span>`).join('') + `</div>`;
+
+  h += `<div class="leg">
+      <span class="lab"><i style="border-color:var(--amber)"></i>Budget ${fmt(B)}</span>
+      <span class="lab"><i style="border-color:var(--red);border-top-style:dotted"></i>Ceiling ${fmt(C)}</span>
+    </div>
+    <div class="hint lab">Drag across to read any ${wk?'week':'day'} · lift to open it above</div>`;
+
+  return h;
+}
+
+function paintChart(){
+  const el = document.getElementById('chart');
+  if (el) el.innerHTML = chartInner();
+}
+
+/* ---------- the chart cursor ----------
+ * There is no room for axis text on a phone, so the figure comes from whatever
+ * your thumb is on. Lifting it steps the week block above to that point, which
+ * makes the line a way of getting somewhere as well as something to look at.
+ */
+let scrubbing = false;
+
+function scrubAt(clientX){
+  const hit = document.getElementById('chart-hit');
+  if (!hit) return;
+  const r = hit.getBoundingClientRect();
+  if (!r.width) return;
+  const n = series().length;
+  const i = Math.max(0, Math.min(n-1, Math.round((clientX - r.left)/r.width*(n-1))));
+  if (i !== scrub){ scrub = i; paintChart(); }
+}
+
+function scrubEnd(){
+  if (!scrubbing) return;
+  scrubbing = false;
+  if (scrub === null) return;
+  const pts = series(), p = pts[Math.max(0, Math.min(pts.length-1, scrub))];
+  if (!p) return;
+  const m = mondayOf(parseYmd(p.key));
+  if (ymd(m) !== ymd(histMon)){ histMon = m; renderHistory(); }
 }
 
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -740,12 +1025,23 @@ function disarm(){ if (armed){ armed = null; clearTimeout(armT); } }
 /* ---------- one day, opened from a bar ---------- */
 const isOn = id => document.getElementById(id).classList.contains('on');
 const dayOpen = () => isOn('day');
-function refresh(){ render(); if (dayOpen()) renderDay(); }
+function refresh(){
+  render();
+  if (dayOpen()) renderDay();
+  if (isOn('history')) renderHistory();
+}
 
-function openDay(date){
-  dayDate = date;
+function openDay(date, from){
+  dayDate = date; dayFrom = from || null;
+  if (from === 'history') document.getElementById('history').classList.remove('on');
   renderDay();
   openSheet('day');
+}
+
+function closeDay(){
+  document.getElementById('day').classList.remove('on');
+  if (dayFrom === 'history'){ dayFrom = null; renderHistory(); return openSheet('history'); }
+  closeSheets();
 }
 
 function renderDay(){
@@ -1124,7 +1420,7 @@ function closePad(){
 function closeSheets(){
   document.querySelector('.scrim').classList.remove('on');
   document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'));
-  foodsFrom = null; editFood = null; clearFlash();
+  foodsFrom = null; editFood = null; dayFrom = null; clearFlash();
   document.getElementById('dump').style.display='none';
   document.getElementById('exp-note').textContent='';
   const p = document.getElementById('paste');
@@ -1183,10 +1479,22 @@ document.addEventListener('click', e => {
   if (a==='open-list') return openPad('list');
   if (a==='close')     return closeSheets();
   if (a==='close-pad') return closePad();
-  if (a==='day')       return openDay(b.dataset.d);
+  if (a==='day')       return openDay(b.dataset.d, isOn('history') ? 'history' : null);
+  if (a==='close-day') return closeDay();
   if (a==='day-add'){
     document.getElementById('day').classList.remove('on');
     return openPad('day');
+  }
+
+  if (a==='history')   return openHistory();
+  /* the week steps; the trend underneath it doesn't move, so the cursor stays
+     where it was put */
+  if (a==='hist-prev'){ histMon = addDays(histMon,-7); return renderHistory(); }
+  if (a==='hist-next'){ histMon = addDays(histMon, 7); return renderHistory(); }
+  if (a==='ch-day' || a==='ch-week'){
+    chartMode = a==='ch-day' ? 'day' : 'week';
+    scrub = null;               /* an index means a different thing in each */
+    return paintChart();
   }
   /* keep the typed amount and name — saving a food doesn't add one, so the
      commit button is still there to be pressed */
@@ -1345,6 +1653,14 @@ document.addEventListener('click', e => {
     Store.wipe(); S = blank(); save(); closeSheets(); return render();
   }
 });
+
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest || !e.target.closest('#chart-hit')) return;
+  scrubbing = true; scrubAt(e.clientX);
+});
+document.addEventListener('pointermove', e => { if (scrubbing) scrubAt(e.clientX); });
+document.addEventListener('pointerup', scrubEnd);
+document.addEventListener('pointercancel', () => { scrubbing = false; });
 
 document.getElementById('kp-go').addEventListener('click', commit);
 
