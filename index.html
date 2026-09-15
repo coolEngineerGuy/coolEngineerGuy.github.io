@@ -492,7 +492,14 @@ const Store = {
 
 const DEFAULT_BUDGET = 2000;
 const DEFAULT_TDEE = 3100;
-const KEEP_WEEKS = 8;
+/* five years of daily records — at roughly half a kilobyte a day that is well
+   under a megabyte, comfortably inside what localStorage will hold */
+const KEEP_WEEKS = 260;
+/* How much of that the trend line draws at once. The chart box is a fixed 480
+   units wide, so more history squeezes the points rather than scrolling them:
+   past about 90 of them the dots merge into a band and the drag cursor can no
+   longer land on one. Days gets two months, weeks a year — both stay clear. */
+const CHART_WEEKS = {day: 9, week: 52};
 const DAYS = ['M','T','W','T','F','S','S'];
 
 let S = null, curDay = null, mode = 'eat', expr = '', dayDate = null;
@@ -787,11 +794,12 @@ function weekBlock(mon, live){
 /* ---------- history ----------
  * The front page is deliberately about today and this week. Everything else the
  * retention window still holds lives here: the same week block stepped back a
- * week at a time, and a line underneath for the shape of the whole record.
+ * week at a time, and a line underneath for the shape of the weeks around it.
  */
 
 /* Where the record starts — the retention cut, or the first day you actually
-   logged, whichever is later. Both the stepper and the chart begin there. */
+   logged, whichever is later. How far back the stepper goes, and the floor the
+   chart window will not reach past. */
 function firstMonday(){
   const cur = mondayOf();
   const floor = addDays(cur, -7*KEEP_WEEKS);
@@ -799,6 +807,18 @@ function firstMonday(){
   if (!keys.length) return cur;
   const first = mondayOf(parseYmd(keys[0]));
   return first < floor ? floor : first;
+}
+
+/* The trend line's window: CHART_WEEKS back from the week on show, stopping at
+   the start of the record. It ends at the week on show rather than at today, so
+   stepping the block above slides the line along with it instead of leaving it
+   behind — which is what keeps drag-to-open worth having now that the stepper
+   reaches years further back than the chart can legibly draw. */
+function chartStart(){
+  const end = histMon || mondayOf();
+  const floor = firstMonday();
+  const back = addDays(end, -7*(CHART_WEEKS[chartMode]-1));
+  return back < floor ? floor : back;
 }
 
 function openHistory(){
@@ -826,9 +846,9 @@ function renderHistory(){
     </div>`
     + weekBlock(histMon, false)
     + `<div class="panel"><div class="chart" id="chart">${chartInner()}</div></div>`
-    + `<p class="note">${KEEP_WEEKS} weeks of daily records are kept — older days are
-       dropped as new ones arrive. Export a CSV or JSON backup from Settings to
-       keep them for longer.</p>`;
+    + `<p class="note">${Math.round(KEEP_WEEKS/52)} years of daily records are kept — older
+       days are dropped as new ones arrive. Export a CSV or JSON backup from Settings
+       to keep them for longer.</p>`;
 }
 
 /* ---------- the trend line ----------
@@ -849,21 +869,24 @@ const toneCol = (v,b,c) => ({ok:'var(--green)', warn:'var(--amber)', over:'var(-
 const lastLogged = pts => { for (let i=pts.length-1;i>=0;i--) if (pts[i].has) return i; return 0; };
 
 function series(){
-  const t = ymd(), start = firstMonday(), out = [];
+  const t = ymd(), start = chartStart(), out = [];
+  const end = histMon || mondayOf();       /* the last week in the window */
   if (chartMode === 'week'){
-    const last = ymd(mondayOf());
+    const cur = ymd(mondayOf()), last = ymd(end);
     for (let m = new Date(start); ymd(m) <= last; m = addDays(m,7)){
       const wd = weekDates(m);
       out.push({
         key: ymd(m), label: weekRange(m),
         v: wd.reduce((a,d)=>a+dayTotal(d),0),
         has: wd.some(d => (S.days[d]||[]).length),
-        partial: ymd(m) === last
+        partial: ymd(m) === cur
       });
     }
     return out;
   }
-  for (let d = new Date(start); ymd(d) <= t; d = addDays(d,1)){
+  /* a week still running stops at today; a past one runs to its Sunday */
+  const stop = ymd(addDays(end,6)), lastDay = stop > t ? t : stop;
+  for (let d = new Date(start); ymd(d) <= lastDay; d = addDays(d,1)){
     const k = ymd(d);
     out.push({
       key:k, label:parseYmd(k).toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'}),
@@ -984,7 +1007,13 @@ function scrubEnd(){
   const pts = series(), p = pts[Math.max(0, Math.min(pts.length-1, scrub))];
   if (!p) return;
   const m = mondayOf(parseYmd(p.key));
-  if (ymd(m) !== ymd(histMon)){ histMon = m; renderHistory(); }
+  if (ymd(m) === ymd(histMon)) return;
+  histMon = m;
+  /* the window ends at the week on show, so moving it renumbers the points —
+     find the one you lifted on again rather than keeping a stale index */
+  const i = series().findIndex(x => x.key === p.key);
+  scrub = i < 0 ? null : i;
+  renderHistory();
 }
 
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1487,10 +1516,10 @@ document.addEventListener('click', e => {
   }
 
   if (a==='history')   return openHistory();
-  /* the week steps; the trend underneath it doesn't move, so the cursor stays
-     where it was put */
-  if (a==='hist-prev'){ histMon = addDays(histMon,-7); return renderHistory(); }
-  if (a==='hist-next'){ histMon = addDays(histMon, 7); return renderHistory(); }
+  /* the window ends at the week on show, so stepping slides the trend with it;
+     the cursor drops to the latest point rather than keeping a stale index */
+  if (a==='hist-prev'){ histMon = addDays(histMon,-7); scrub = null; return renderHistory(); }
+  if (a==='hist-next'){ histMon = addDays(histMon, 7); scrub = null; return renderHistory(); }
   if (a==='ch-day' || a==='ch-week'){
     chartMode = a==='ch-day' ? 'day' : 'week';
     scrub = null;               /* an index means a different thing in each */

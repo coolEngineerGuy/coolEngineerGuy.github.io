@@ -100,7 +100,7 @@ colours it amber; red is reserved for going past the ceiling, where the week is
 in genuine surplus. Changing either re-scores every day on display, past ones
 included.
 
-Eight weeks of daily records are retained. The front page stays on this week and
+Five years of daily records are retained. The front page stays on this week and
 last week's total; everything else is under **History**. Days older than the
 window are dropped as new ones arrive, so export if you want to keep them.
 
@@ -109,11 +109,14 @@ window are dropped as new ones arrive, so export if you want to keep them.
 **History & trend**, at the foot of the week panel, opens the record. The top of
 the sheet is the same week block the front page shows — the same bars, the same
 budget and ceiling lines — with **‹** and **›** to step a week at a time, as far
-back as the retention window goes. Bars stay tappable, so a day eight weeks ago
+back as the record goes. Bars stay tappable, so a day two years ago
 opens exactly as today's does, entries and all, and **Done** comes back to the
 week you were looking at rather than dumping you on the front page.
 
-Underneath is the trend, toggled between **Days** and **Weeks**. Both are drawn
+Underneath is the trend, toggled between **Days** and **Weeks**. The plot is a
+fixed width, so it draws a window rather than the whole record: the two months
+up to the week on show in **Days**, the year up to it in **Weeks**. Stepping the
+week block slides that window with it. Both are drawn
 against two dashed rules: amber where the daily budget sits, red where the
 expenditure ceiling does, each multiplied by seven in the weeks view. A point
 above the amber line is an amber day; above the red one the week is in genuine
