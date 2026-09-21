@@ -27,6 +27,8 @@ Live at **https://coolengineerguy.github.io/**
   week at a time
 - A trend line by day or by week, drawn against the same budget and ceiling, with
   a cursor you drag to read any point off it
+- Estimate mode for a meal nobody put a number on, with generous stand-ins for
+  eating out — counted in full, marked ≈ wherever the total is shown
 - Installable as a PWA — launcher icon, no address bar, works offline
 - CSV and JSON export, JSON restore
 - Light and dark themes, following the system setting
@@ -47,6 +49,31 @@ logs it against the day you ticked it, so the list stays a same-day scratchpad �
 anything left on it at midnight is dropped. Nothing is lost by that, because
 items only enter the log when ticked. Bought something today to eat tomorrow?
 Use **Log eaten** tomorrow rather than the list.
+
+## Estimates
+
+Some meals never come with a number. Two restaurant courses aren't going to tell
+you what they cost, and logging nothing is worse than a rough figure — a blank
+day doesn't read as *unknown*, it reads as a day you ate nothing, and quietly
+credits you for it.
+
+**≈ Est**, at the left of the chip strip, turns the keypad over to estimating.
+The strip swaps its saved foods for stand-ins — coffee and cake, restaurant main,
+pub lunch, takeaway, two courses, three courses — each one rounded towards the
+top of its plausible range rather than the middle, because the mistake that
+matters here is a night out costing you nothing. Tap one, or type your own
+number; either way the entry is flagged. Tap **≈ Est** again to go back to exact
+entry, and the pad always opens exact.
+
+A flagged entry counts in full. Nothing about the arithmetic changes — what
+changes is what the arithmetic is allowed to claim. Every total containing one
+is printed with a **≈** in front of it, from the entry row up through the day,
+the week, the weekly ceiling and the trend line, and the day's bar in the week
+view is drawn struck through. Months later a week you partly guessed still
+doesn't pass for one you measured.
+
+Estimates stay out of the recent-amounts chips and can't be saved as foods:
+those are lists of numbers you trust, and a guess doesn't belong in either.
 
 ## Saved foods
 
@@ -145,8 +172,9 @@ survive clearing browsing data, uninstalling with the "remove data" option, or
 switching browser or phone.
 
 **Export from Settings periodically.** CSV gives one row per entry
-(`date, time, kcal, label, source`) for use in a spreadsheet; backfilled entries
-have an empty `time`. JSON is a full backup — day records, settings and saved
+(`date, time, kcal, label, source, estimate`) for use in a spreadsheet;
+backfilled entries have an empty `time`, and `estimate` reads `yes` on a flagged
+entry so the flag survives the trip into a spreadsheet. JSON is a full backup — day records, settings and saved
 foods — that **Restore** reads back in, and is the route onto a new phone.
 
 ## Installing

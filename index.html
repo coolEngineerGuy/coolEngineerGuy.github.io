@@ -165,6 +165,12 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
 .bars .d:active:not(:disabled) .bar{border-color:var(--green)}
 .bars .dl{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-align:center;color:var(--muted)}
 .bars .d.today .dl{color:var(--ink);font-weight:700}
+/* a day with a guessed meal in it: the fill is struck through, so a week of
+   solid bars and a week with a night out in it don't read the same at a glance */
+.bars .bar.est i{
+  background-image:repeating-linear-gradient(45deg,
+    transparent,transparent 3px,var(--panel) 3px,var(--panel) 5px);
+}
 .lastwk{
   display:flex;justify-content:space-between;align-items:baseline;
   padding:10px 12px;border-top:1px solid var(--rule);
@@ -244,6 +250,9 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
   text-transform:uppercase;color:var(--muted);
 }
 .all:active{background:var(--ink);color:var(--paper)}
+/* after :active, so the toggle keeps saying it's on while you press it */
+.all[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:var(--paper)}
+.strip button.est{border-color:var(--amber);border-style:dashed}
 
 /* ---- foods ---- */
 #foods-top{position:sticky;top:0;z-index:1;background:var(--paper);padding:1px 0 8px}
@@ -374,6 +383,8 @@ header button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-t
     <button id="save-food" data-a="save-food" disabled>Save</button>
   </div>
   <div class="striprow">
+    <button class="all" id="est-btn" data-a="est" aria-pressed="false"
+            aria-label="Estimate mode">&asymp; Est</button>
     <div class="strip" id="strip"></div>
     <button class="all" data-a="foods-pick" aria-label="All saved foods">Foods</button>
   </div>
@@ -503,6 +514,8 @@ const CHART_WEEKS = {day: 9, week: 52};
 const DAYS = ['M','T','W','T','F','S','S'];
 
 let S = null, curDay = null, mode = 'eat', expr = '', dayDate = null;
+/* estimates: whether the pad is currently marking what it commits as a guess */
+let estMode = false;
 /* foods: the picker's provenance ('pad' picks, 'settings' manages), which food is
    being edited, and the chip list the keypad is currently showing */
 let foodsFrom = null, editFood = null, padChips = [];
@@ -553,6 +566,20 @@ const blank = () => ({
 
 function dayTotal(date){ return (S.days[date]||[]).reduce((a,e)=>a+e.kcal,0); }
 function pendingTotal(){ return S.list.items.filter(i=>!i.eaten).reduce((a,i)=>a+i.kcal,0); }
+
+/* ---------- estimates ----------
+ * A meal nobody put a number on — two courses in a restaurant — is still worth
+ * a figure, because filing it as nothing credits you with a day you didn't have.
+ * So it goes in as a deliberately generous stand-in, flagged. The flag doesn't
+ * change any arithmetic; it changes what the arithmetic is allowed to claim.
+ * Every total that contains one is printed with a ≈ in front of it, and the day
+ * shows a struck-through bar, so a week you partly guessed never passes for one
+ * you measured.
+ */
+const dayEst = date => (S.days[date]||[]).some(e => e.est);
+const weekEst = wd => wd.some(dayEst);
+/* the ≈, or nothing — so a total reads exactly as it always did when it's exact */
+const ax = on => on ? '\u2248' : '';
 
 function log(date, entry){ (S.days[date] ||= []).push(entry); }
 
@@ -643,6 +670,7 @@ function render(){
   const B = S.budget, C = S.tdee;
   const used = dayTotal(t), left = B - used, pend = pendingTotal(), after = left - pend;
   const cLeft = C - used, cAfter = cLeft - pend;
+  const apx = ax(dayEst(t));
 
   document.getElementById('today').textContent =
     new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'short'});
@@ -654,9 +682,9 @@ function render(){
   /* hero */
   let h = `<div class="panel"><div class="hero ${tn}">
     <div class="lab">${left < 0 ? 'Over budget by' : 'Remaining today'}</div>
-    <div class="big">${fmt(Math.abs(left))}<span class="unit">KCAL</span></div>
+    <div class="big">${apx}${fmt(Math.abs(left))}<span class="unit">KCAL</span></div>
     <div class="sub">
-      <span class="v">${fmt(used)} of ${fmt(B)} eaten</span>
+      <span class="v">${apx}${fmt(used)} of ${fmt(B)} eaten</span>
       <span class="v">${Math.round(used/B*100)}%</span>
     </div>
     <div class="ri ${tn}">
@@ -665,7 +693,7 @@ function render(){
     </div>
     <div class="ceil ${used > C ? 'over' : (used > B ? 'warn' : '')}">
       <div class="lab">Ceiling ${fmt(C)}</div>
-      <div class="n">${cLeft < 0 ? fmt(-cLeft)+' over' : fmt(cLeft)+' left'}</div>
+      <div class="n">${apx}${cLeft < 0 ? fmt(-cLeft)+' over' : fmt(cLeft)+' left'}</div>
     </div>`;
 
   if (pend > 0){
@@ -700,7 +728,7 @@ function render(){
                 aria-pressed="${i.eaten}" aria-label="${i.eaten?'Eaten':'Not eaten yet'}">
           <span class="tick">✓</span>
           <span class="name ${i.label?'':'none'}">${i.label ? esc(i.label) : 'Unlabelled'}</span>
-          <span class="kcal">${fmt(i.kcal)}</span>
+          <span class="kcal">${ax(i.est)}${fmt(i.kcal)}</span>
         </button>
         ${delBtn('item', i.id)}
       </div>`).join('') + `</div>`;
@@ -722,7 +750,7 @@ function render(){
   const entries = (S.days[t]||[]).slice().sort((a,b)=>b.ts-a.ts);
   if (entries.length){
     h += `<div class="panel">
-      <div class="head"><div class="lab">Eaten today</div><div class="lab">${fmt(used)} kcal</div></div>
+      <div class="head"><div class="lab">Eaten today</div><div class="lab">${apx}${fmt(used)} kcal</div></div>
       <div class="rows">` + entries.map(e => entryRow(e, t)).join('') + `</div></div>`;
   }
 
@@ -748,42 +776,44 @@ function weekBlock(mon, live){
   const elapsed = wd.filter(d => d <= t).length;
   const done = elapsed === 7;
   const off = wtot - B*elapsed, wLeft = wc - wtot;
+  const apx = ax(weekEst(wd));
 
   let h = `<div class="panel"><div class="week">
     <div class="top">
       <div>
         <div class="lab">${live ? 'This week' : 'Week total'} vs ${fmt(wb)}</div>
-        <div class="n ${wtot>wc?'over':(wtot>wb?'warn':'')}">${fmt(wtot)}</div>
+        <div class="n ${wtot>wc?'over':(wtot>wb?'warn':'')}">${apx}${fmt(wtot)}</div>
       </div>
       <div style="text-align:right">
         <div class="lab">${done ? 'Vs budget' : 'Pace'}</div>
         <div class="v" style="font-family:var(--mono);font-size:13px;margin-top:3px">
-          ${elapsed ? (off >= 0 ? '+' : '−') + fmt(Math.abs(off)) : '—'}
+          ${elapsed ? apx + (off >= 0 ? '+' : '−') + fmt(Math.abs(off)) : '—'}
         </div>
       </div>
     </div>
     <div class="bars">` + wd.map((d,i) => {
-      const v = dayTotal(d), future = d > t;
+      const v = dayTotal(d), future = d > t, de = !future && dayEst(d);
       return `<button class="d ${d===t?'today':''}" ${future?'disabled':`data-a="day" data-d="${d}"`}
-              aria-label="${longDate(d)}${future?', not yet':', '+fmt(v)+' kcal'}">
-        <span class="bar ${tone(v,B,C)}" style="height:${future?3:Math.max(3, v/peak*70)}px">
+              aria-label="${longDate(d)}${future?', not yet':', '+(de?'estimated ':'')+fmt(v)+' kcal'}">
+        <span class="bar ${tone(v,B,C)} ${de?'est':''}" style="height:${future?3:Math.max(3, v/peak*70)}px">
           ${future?'':`<i style="height:100%"></i>`}
         </span>
         <span class="dl">${DAYS[i]}</span>
       </button>`;
     }).join('') + `</div>
-    <div class="hint lab">Tap a day to see it, or add to it</div></div>
+    <div class="hint lab">${apx ? '≈ Partly estimated · ' : ''}Tap a day to see it, or add to it</div></div>
     <div class="lastwk">
       <div class="lab">Weekly ceiling ${fmt(wc)}</div>
       <div class="n strong" style="${wLeft<0?'color:var(--red)':''}">
-        ${wLeft < 0 ? fmt(-wLeft)+' over' : fmt(wLeft)+' left'}</div>
+        ${apx}${wLeft < 0 ? fmt(-wLeft)+' over' : fmt(wLeft)+' left'}</div>
     </div>`;
 
   if (live){
-    const ltot = weekDates(addDays(mon,-7)).reduce((a,d)=>a+dayTotal(d),0);
+    const lwd = weekDates(addDays(mon,-7));
+    const ltot = lwd.reduce((a,d)=>a+dayTotal(d),0);
     h += `<div class="lastwk">
       <div class="lab">Last week</div>
-      <div class="n" style="color:${ltot>wc?'var(--red)':(ltot>wb?'var(--amber)':'var(--muted)')}">${fmt(ltot)} / ${fmt(wb)}</div>
+      <div class="n" style="color:${ltot>wc?'var(--red)':(ltot>wb?'var(--amber)':'var(--muted)')}">${ax(weekEst(lwd))}${fmt(ltot)} / ${fmt(wb)}</div>
     </div>
     <div class="acts"><button data-a="history">History &amp; trend</button></div>`;
   }
@@ -879,6 +909,7 @@ function series(){
         key: ymd(m), label: weekRange(m),
         v: wd.reduce((a,d)=>a+dayTotal(d),0),
         has: wd.some(d => (S.days[d]||[]).length),
+        est: weekEst(wd),
         partial: ymd(m) === cur
       });
     }
@@ -890,7 +921,7 @@ function series(){
     const k = ymd(d);
     out.push({
       key:k, label:parseYmd(k).toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'}),
-      v:dayTotal(k), has:(S.days[k]||[]).length > 0, partial:k === t
+      v:dayTotal(k), has:(S.days[k]||[]).length > 0, est:dayEst(k), partial:k === t
     });
   }
   return out;
@@ -923,8 +954,8 @@ function chartInner(){
 
   h += `<div class="readout">
     <div>
-      <div class="n ${sp.has ? tone(sp.v,B,C) : 'zero'}">${sp.has ? fmt(sp.v) : '—'}</div>
-      <div class="lab" style="margin-top:6px">${sp.has ? (wk?'kcal that week':'kcal that day') : 'nothing logged'}</div>
+      <div class="n ${sp.has ? tone(sp.v,B,C) : 'zero'}">${sp.has ? ax(sp.est)+fmt(sp.v) : '—'}</div>
+      <div class="lab" style="margin-top:6px">${sp.has ? (sp.est?'kcal, partly estimated':(wk?'kcal that week':'kcal that day')) : 'nothing logged'}</div>
     </div>
     <div class="after">${sp.label}${sp.partial ? '<br>so far' : ''}</div>
   </div>`;
@@ -1029,7 +1060,7 @@ function entryRow(e, date){
     <div class="hit" style="cursor:default">
       <span class="t">${when}</span>
       <span class="name ${e.label?'':'none'}">${e.label ? esc(e.label) : (e.src==='list'?'From list':'Quick add')}</span>
-      <span class="kcal">${fmt(e.kcal)}</span>
+      <span class="kcal" ${e.est?'aria-label="estimated '+fmt(e.kcal)+' kcal"':''}>${ax(e.est)}${fmt(e.kcal)}</span>
     </div>
     ${delBtn('entry', e.id, date)}
   </div>`;
@@ -1079,19 +1110,20 @@ function renderDay(){
   const rel = relDay(date);
   const entries = (S.days[date]||[]).slice().sort((a,b)=>b.ts-a.ts);
   const col = cLeft < 0 ? 'var(--red)' : (left < 0 ? 'var(--amber)' : 'var(--ink)');
+  const apx = ax(dayEst(date));
 
   document.getElementById('day-title').textContent =
     rel === 'today' || rel === 'yesterday' ? `${rel} — ${longDate(date)}` : longDate(date);
 
   let h = `<div class="readout">
     <div>
-      <div class="n ${used ? tone(used,B,C) : 'zero'}">${fmt(used)}</div>
+      <div class="n ${used ? tone(used,B,C) : 'zero'}">${apx}${fmt(used)}</div>
       <div class="lab" style="margin-top:7px">kcal logged</div>
     </div>
     <div class="after">
       OF ${fmt(B)}<br>
-      <span style="font-size:17px;font-weight:700;color:${col}">${left<0?'−'+fmt(-left):fmt(left)}</span><br>
-      <span style="color:${cLeft<0?'var(--red)':'var(--muted)'}">${cLeft<0?fmt(-cLeft)+' OVER CEILING':fmt(cLeft)+' TO CEILING'}</span>
+      <span style="font-size:17px;font-weight:700;color:${col}">${apx}${left<0?'−'+fmt(-left):fmt(left)}</span><br>
+      <span style="color:${cLeft<0?'var(--red)':'var(--muted)'}">${apx}${cLeft<0?fmt(-cLeft)+' OVER CEILING':fmt(cLeft)+' TO CEILING'}</span>
     </div>
   </div>`;
 
@@ -1104,6 +1136,10 @@ function renderDay(){
     ? `<div class="rows">` + entries.map(e => entryRow(e, date)).join('') + `</div>`
     : `<div class="empty">Nothing logged for this day.</div>`;
   h += `</div>`;
+
+  if (apx) h += `<p class="note">&asymp; Something here was estimated rather than
+    read off a packet. It counts in full — the mark is there so you know the day's
+    total is a generous guess, not a measurement.</p>`;
 
   document.getElementById('day-body').innerHTML = h;
   document.getElementById('day-hint').textContent =
@@ -1163,7 +1199,8 @@ function press(k){
 
 /* ---------- keypad ---------- */
 function openPad(m){
-  mode = m; expr = '';
+  mode = m; expr = ''; estMode = false;
+  document.getElementById('est-btn').setAttribute('aria-pressed', 'false');
   document.getElementById('kp-title').textContent =
     m==='eat' ? 'Log eaten now' : m==='list' ? 'Add to list' : `Add to ${relDay(dayDate)}`;
   document.getElementById('label').value = '';
@@ -1185,7 +1222,27 @@ function openPad(m){
  */
 const CHIP_FOODS = 6, CHIP_MAX = 10;
 
+/* The stand-ins the strip offers in estimate mode. They are rounded up rather
+   than averaged: the failure that matters is a night out quietly costing you
+   nothing, so every one of these is nearer the top of its range than the
+   middle. Nothing here is accurate and nothing here pretends to be — they are
+   flagged the moment they land. */
+const EST_CHIPS = [
+  {kcal:550,  label:'Coffee & cake'},
+  {kcal:950,  label:'Restaurant main'},
+  {kcal:1100, label:'Pub lunch'},
+  {kcal:1300, label:'Takeaway'},
+  {kcal:1500, label:'Two courses'},
+  {kcal:2000, label:'Three courses'}
+];
+
 function buildChips(){
+  /* your own foods are numbers you trust, so they have no place here — the
+     whole strip turns over rather than mixing the two */
+  if (estMode){
+    padChips = EST_CHIPS.map(c => ({kind:'est', kcal:c.kcal, label:c.label}));
+    return;
+  }
   const foods = S.foods.slice().sort((a,b) => (b.last||0) - (a.last||0)).slice(0, CHIP_FOODS)
     .map(f => ({kind:'food', id:f.id, name:f.name, kcal:f.kcal}));
   const room = Math.max(0, CHIP_MAX - foods.length);
@@ -1202,6 +1259,9 @@ function renderStrip(){
   document.getElementById('strip').innerHTML = padChips.map((c,i) => c.kind === 'food'
     ? `<button class="food" data-c="${i}" aria-label="Add ${esc(c.name)}, ${fmt(c.kcal)} kcal"`
       + `><b>${esc(short(c.name))}</b><span>${fmt(c.kcal)}</span></button>`
+    : c.kind === 'est'
+    ? `<button class="est" data-c="${i}" aria-label="Add ${esc(c.label)}, estimated ${fmt(c.kcal)} kcal"`
+      + `><b>${esc(short(c.label))}</b><span>&asymp;${fmt(c.kcal)}</span></button>`
     : `<button data-c="${i}" aria-label="Add ${fmt(c.kcal)} kcal${c.label?', '+esc(c.label):''}"`
       + `><b>${fmt(c.kcal)}</b>${c.label?`<span>${esc(short(c.label))}</span>`:''}</button>`
   ).join('');
@@ -1209,22 +1269,28 @@ function renderStrip(){
 
 /* One tap, one entry — the same thing commit() does, without the pad. Whatever
    was half-typed is cleared, so the readout goes back to showing the truth. */
-function addQuick(kcal, label, foodId){
+function addQuick(kcal, label, foodId, est){
   const t = ymd();
   if (foodId) usedFood(S.foods.find(f => f.id === foodId));
   if (mode === 'list'){
-    S.list.items.push({id:uid(), kcal, label, eaten:false});
+    const it = {id:uid(), kcal, label, eaten:false};
+    if (est) it.est = true;
+    S.list.items.push(it);
   } else {
     const date = mode === 'day' ? dayDate : t;
-    log(date, {id:uid(), kcal, label, ts:Date.now(), src: date===t ? 'manual' : 'backfill'});
+    const e = {id:uid(), kcal, label, ts:Date.now(), src: date===t ? 'manual' : 'backfill'};
+    if (est) e.est = true;
+    log(date, e);
   }
-  if (!foodId) pushRecent(kcal, label);
+  /* a guess is not a number you'd want offered back to you as one — recents
+     stay a list of amounts you actually read off a packet */
+  if (!foodId && !est) pushRecent(kcal, label);
   expr = ''; document.getElementById('label').value = '';
   save(); refresh();
 }
 
-function addedMsg(label, kcal){
-  const what = `${label || 'Unlabelled'} · ${fmt(kcal)}`;
+function addedMsg(label, kcal, est){
+  const what = `${label || 'Unlabelled'} · ${ax(est)}${fmt(kcal)}`;
   return mode === 'list' ? `Added ${what} to the list`
        : mode === 'day' ? `Added ${what} to ${relDay(dayDate)}`
        : `Logged ${what}`;
@@ -1233,8 +1299,9 @@ function addedMsg(label, kcal){
 function chipAdd(i){
   const c = padChips[i]; if (!c) return;
   const name = c.kind === 'food' ? c.name : c.label;
-  addQuick(c.kcal, name, c.id);
-  flash(addedMsg(name, c.kcal));
+  const est = c.kind === 'est';
+  addQuick(c.kcal, name, c.id, est);
+  flash(addedMsg(name, c.kcal, est));
 }
 
 /* ---------- flashes ----------
@@ -1256,20 +1323,24 @@ function paintFlash(){
 /* What the day looks like once this many kcal are added — the same block under
    the keypad readout and at the top of the foods picker. */
 function afterHTML(kcal){
-  const used = dayTotal(mode==='day' ? dayDate : ymd());
+  const date = mode==='day' ? dayDate : ymd();
+  const used = dayTotal(date);
+  /* a guess anywhere in the sum makes every figure below it a guess too */
+  const apx = ax(estMode || dayEst(date));
   /* what's already on the list isn't eaten yet, so it only eats into the room
      you have left while you're shopping for more of it */
   const pend = mode==='list' ? pendingTotal() : 0;
   const after = S.budget - used - pend - kcal, cAfter = S.tdee - used - pend - kcal;
   const col = cAfter < 0 ? 'var(--red)' : (after < 0 ? 'var(--amber)' : 'var(--ink)');
-  const n = `<span style="font-size:17px;color:${col};font-weight:700">${after<0?'−'+fmt(-after):fmt(after)}</span>`;
-  const ceilLine = `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`;
+  const n = `<span style="font-size:17px;color:${col};font-weight:700">${apx}${after<0?'−'+fmt(-after):fmt(after)}</span>`;
+  const ceilLine = `<br><span style="color:${cAfter<0?'var(--red)':'var(--muted)'}">${apx}${cAfter<0?fmt(-cAfter)+' OVER CEILING':fmt(cAfter)+' TO CEILING'}</span>`;
   return mode==='list' ? `ROOM LEFT AFTER LIST<br>${n}${ceilLine}`
-       : mode==='day'  ? `DAY WOULD BE ${fmt(used+kcal)}<br>${n}${ceilLine}`
+       : mode==='day'  ? `DAY WOULD BE ${apx}${fmt(used+kcal)}<br>${n}${ceilLine}`
        : `LEFT AFTER<br>${n}${ceilLine}`;
 }
 
 function modeHint(){
+  if (estMode) return 'Marked ≈ — counted in full, flagged as a guess';
   return mode==='list' ? 'Stays open — keep adding as you shop'
        : mode==='day' ? `Lands on ${longDate(dayDate)}`
        : '';
@@ -1283,7 +1354,7 @@ function updateSaveBtn(kcal){
   const f = name ? namedFood(name) : null;
   const saved = f && kcal && f.kcal === kcal;
   btn.textContent = saved ? 'Saved' : f ? 'Update' : 'Save';
-  btn.disabled = !name || !kcal || !!saved;
+  btn.disabled = !name || !kcal || !!saved || estMode;
 }
 
 function updatePad(){
@@ -1319,12 +1390,16 @@ function commit(){
   if (!kcal || kcal > 99999) return;
   const label = document.getElementById('label').value.trim();
   const t = ymd();
-  /* typed by hand, but if it names a saved food it still counts as using it */
-  usedFood(matchFood(kcal, label));
+  const est = estMode;
+  /* typed by hand, but if it names a saved food it still counts as using it —
+     unless it's a guess, which shouldn't reorder a strip of numbers you trust */
+  if (!est) usedFood(matchFood(kcal, label));
 
   if (mode === 'list'){
-    S.list.items.push({id:uid(), kcal, label, eaten:false});
-    pushRecent(kcal, label);
+    const it = {id:uid(), kcal, label, eaten:false};
+    if (est) it.est = true;
+    S.list.items.push(it);
+    if (!est) pushRecent(kcal, label);
     expr = ''; document.getElementById('label').value = '';
     /* a typed commit is a slow, deliberate act — safe to resort the strip here,
        which is how the thing you just typed becomes a chip */
@@ -1333,8 +1408,10 @@ function commit(){
   }
 
   const date = mode === 'day' ? dayDate : t;
-  log(date, {id:uid(), kcal, label, ts:Date.now(), src: date===t ? 'manual' : 'backfill'});
-  pushRecent(kcal, label);
+  const e = {id:uid(), kcal, label, ts:Date.now(), src: date===t ? 'manual' : 'backfill'};
+  if (est) e.est = true;
+  log(date, e);
+  if (!est) pushRecent(kcal, label);
   save(); render();
   if (mode === 'day') closePad(); else closeSheets();
 }
@@ -1459,13 +1536,13 @@ function closeSheets(){
 
 /* ---------- export ---------- */
 function toCSV(){
-  const rows = [['date','time','kcal','label','source']];
+  const rows = [['date','time','kcal','label','source','estimate']];
   Object.keys(S.days).sort().forEach(d => {
     S.days[d].slice().sort((a,b)=>a.ts-b.ts).forEach(e => {
       /* a backfilled entry's ts is when it was typed, not when it was eaten —
          leave the time blank rather than write one that isn't true of that day */
       rows.push([d, e.src==='backfill' ? '' : new Date(e.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
-                 e.kcal, (e.label||'').replace(/"/g,'""'), e.src]);
+                 e.kcal, (e.label||'').replace(/"/g,'""'), e.src, e.est ? 'yes' : '']);
     });
   });
   return rows.map(r => r.map(c => /[",\n]/.test(String(c)) ? `"${c}"` : c).join(',')).join('\n');
@@ -1536,6 +1613,15 @@ document.addEventListener('click', e => {
     buildChips(); renderStrip();
     document.getElementById('strip').scrollLeft = 0;
     save(); flash(`Saved ${f.name} · ${fmt(f.kcal)} kcal`);
+    return;
+  }
+
+  if (a==='est'){
+    estMode = !estMode;
+    b.setAttribute('aria-pressed', estMode ? 'true' : 'false');
+    buildChips(); renderStrip();
+    document.getElementById('strip').scrollLeft = 0;
+    updatePad();
     return;
   }
 
@@ -1650,7 +1736,9 @@ document.addEventListener('click', e => {
     const t = ymd();
     if (!it.eaten){
       it.eaten = true; it.entryId = uid();
-      log(t, {id:it.entryId, kcal:it.kcal, label:it.label, ts:Date.now(), src:'list'});
+      const en = {id:it.entryId, kcal:it.kcal, label:it.label, ts:Date.now(), src:'list'};
+      if (it.est) en.est = true;
+      log(t, en);
     } else {
       S.days[t] = (S.days[t]||[]).filter(x => x.id !== it.entryId);
       it.eaten = false; delete it.entryId;
