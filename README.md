@@ -58,8 +58,8 @@ day doesn't read as *unknown*, it reads as a day you ate nothing, and quietly
 credits you for it.
 
 **≈ Est**, at the left of the chip strip, turns the keypad over to estimating.
-The strip swaps its saved foods for stand-ins — coffee and cake, restaurant main,
-pub lunch, takeaway, two courses, three courses — each one rounded towards the
+The strip swaps its saved foods for stand-ins — a pint of 0% lager, a pint of lager,
+coffee and cake, restaurant main, pub lunch, takeaway, two courses, three courses — each one rounded towards the
 top of its plausible range rather than the middle, because the mistake that
 matters here is a night out costing you nothing. Tap one, or type your own
 number; either way the entry is flagged. Tap **≈ Est** again to go back to exact

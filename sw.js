@@ -11,7 +11,7 @@
  * cache is deleted on activate, so nothing accumulates.
  */
 
-const VERSION = 'v9';
+const VERSION = 'v10';
 const CACHE = `calcount-${VERSION}`;
 
 const SHELL = [
